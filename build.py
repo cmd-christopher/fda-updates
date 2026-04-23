@@ -12,6 +12,12 @@ DATA_PATH = "data/approvals.json"
 TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "site"
 
+REQUIRED_ASSETS = [
+    "site/css/custom.css",
+    "site/js/list.min.js",
+    "site/js/main.js",
+]
+
 
 def format_date(value):
     if not value:
@@ -24,6 +30,12 @@ def format_date(value):
 
 
 def main():
+    # Verify required assets exist
+    for asset in REQUIRED_ASSETS:
+        if not os.path.exists(asset):
+            print(f"Error: Required asset missing: {asset}", file=sys.stderr)
+            sys.exit(1)
+
     if not os.path.exists(DATA_PATH):
         print(f"Error: {DATA_PATH} not found. Run fda_approvals.py first.", file=sys.stderr)
         sys.exit(1)
@@ -45,6 +57,20 @@ def main():
                 print(f"Error: Missing required field '{field}' in {name}", file=sys.stderr)
                 sys.exit(1)
 
+    # Compute last_updated from data metadata (AUTO-05)
+    query_meta = data.get("query", {})
+    date_to = query_meta.get("date_to")
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d")
+            last_updated = dt.strftime("%B %d, %Y")
+        except (ValueError, TypeError):
+            last_updated = datetime.now().strftime("%B %d, %Y")
+    else:
+        # Fallback: use file modification time
+        mtime = os.path.getmtime(DATA_PATH)
+        last_updated = datetime.fromtimestamp(mtime).strftime("%B %d, %Y")
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     env = Environment(
@@ -56,14 +82,14 @@ def main():
     template = env.get_template("index.html")
     html = template.render(
         drugs=drugs,
-        last_updated=datetime.now().strftime("%B %d, %Y"),
+        last_updated=last_updated,
     )
 
     output_path = os.path.join(OUTPUT_DIR, "index.html")
     with open(output_path, "w") as f:
         f.write(html)
 
-    print(f"Built {output_path} with {len(drugs)} drug approvals")
+    print(f"Built {output_path} with {len(drugs)} drug approvals (data through {date_to or 'unknown'})")
 
 
 if __name__ == "__main__":
