@@ -72,7 +72,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. A systemd timer runs the data fetch + build pipeline automatically on a weekly schedule
   2. After a successful build, changes are automatically committed and pushed to the Synology NAS, deploying the updated site
   3. Pipeline failures produce visible errors (non-zero exit code, no silent stale data)
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+- [ ] 04-01-PLAN.md — Incremental label fetching: add --cache flag and set_id to fda_approvals.py, create label cache
+- [ ] 04-02-PLAN.md — Pipeline automation: run_fda_pipeline.sh wrapper, systemd service + timer, Pushover failure notification
 
 ## Progress
 
@@ -84,4 +86,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
 | 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
 | 3. Drug Detail Pages | 2/2 | Complete | 2026-04-23 |
-| 4. Automation & Deployment | 0/? | Not started | - |
+| 4. Automation & Deployment | 0/2 | Planned | - |
