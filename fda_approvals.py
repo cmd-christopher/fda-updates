@@ -43,7 +43,15 @@ def slugify(name):
     return name.strip("-")
 
 
-def truncate_indication(text, max_length=100):
+def extract_short_indication(text, brand_name=""):
+    """Extract a concise indication from FDA label text.
+
+    Turns verbose FDA indications like:
+      "COSENTYX is a human interleukin-17A antagonist indicated for
+       the treatment of moderate to severe plaque psoriasis..."
+    Into:
+      "moderate to severe plaque psoriasis"
+    """
     if not text:
         return ""
     if isinstance(text, list):
@@ -55,16 +63,99 @@ def truncate_indication(text, max_length=100):
         return ""
     if text[0].isdigit() and text[1:2] == " ":
         text = re.sub(r"^\d+\s+", "", text)
-    if len(text) <= max_length:
-        return text
-    sentence_end = re.search(r"[.!?](\s|$)", text[:max_length + 20])
-    if sentence_end and sentence_end.start() > 20:
-        return text[:sentence_end.start() + 1].strip()
-    clause_end = re.search(r"[,;:](\s)", text[50:max_length + 10])
-    if clause_end:
-        pos = 50 + clause_end.start()
-        return text[:pos].strip() + "..."
-    return text[:max_length].rsplit(" ", 1)[0].strip() + "..."
+
+    def _clean(s):
+        s = re.sub(r"\s*\(\s*\d+(\.\d+)?\s*\)", "", s).strip()
+        s = re.sub(r"\s*\[\s*see\s+.*?\]", "", s, flags=re.IGNORECASE).strip()
+        return s.rstrip(";:,.").strip()
+
+    def _first_condition(s):
+        """Take the first condition from a colon-separated or semicolon list.
+
+        Splits on section references like (1.2) or ( 1.2 ) followed by a new condition,
+        but preserves parenthetical qualifiers like (Wet) or (nAMD) that are part of
+        the condition name.
+        """
+        # Split on section-reference parens: "( 1.X )" or "(1.X)" followed by a capital letter
+        # that starts a new condition name. These look like "nAMD) ( 1.1 ) Diabetic"
+        # But DON'T split on "(Wet) Age" — parenthetical qualifiers within condition names.
+        parts = re.split(r"\)\s*\(\s*\d+(?:\.\d+)?\s*\)\s+(?=[A-Z])", s, maxsplit=1)
+        result = parts[0] if parts else s
+        result = re.sub(r"\s*\(\s*\d+(\.\d+)?\s*\)$", "", result).strip()
+        return result.rstrip(";:,.").strip()
+
+    clean_name = re.sub(r"\s+(TM|®|℠)", "", brand_name, flags=re.IGNORECASE) if brand_name else ""
+
+    # FDA duplicate-sentence: "DRUG is ... indicated for ... : DRUG is ... indicated for ... : Cond1 (1.1) Cond2 (1.2)"
+    if clean_name:
+        dup = re.search(
+            r"indicated for\s+.+?:\s*(?:" + re.escape(clean_name) + r"\s+is\s+a?\s*|is\s+)?(?:.+?\s+)?indicated for\s+(?:the\s+)?(?:treatment|management|prevention|use)\s+of\s+(?:patients\s+with\s*:\s*)(.+)",
+            text, re.IGNORECASE,
+        )
+        if dup:
+            return _first_condition(_clean(dup.group(1)))[:100]
+
+    # "indicated for the treatment/management/etc of: CONDITIONS" (colon list)
+    m = re.search(
+        r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(?:patients\s+(?:with|who)\s+)?:?\s*(.+?)(?:\.\s+(?:\(\s*\d)|\.\s+[A-Z]|\.$)",
+        text, re.IGNORECASE | re.DOTALL,
+    )
+    if m:
+        return _first_condition(_clean(m.group(1)))[:100]
+
+    # "indicated for the treatment/etc of CONDITION"
+    m = re.search(
+        r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(.+?)(?:\.(?:\s|$))",
+        text, re.IGNORECASE,
+    )
+    if m:
+        return _clean(m.group(1))[:100]
+
+    # "DRUG is indicated for: CONDITION" (colon, no treatment/management keyword)
+    m = re.search(r"indicated for:\s*(.+?)(?:\.\s+[A-Z]|\.$)", text, re.IGNORECASE | re.DOTALL)
+    if m:
+        return _first_condition(_clean(m.group(1)))[:100]
+
+    # "indicated to reduce/increase/improve/etc CONDITION"
+    m = re.search(
+        r"indicated to\s+(?:reduce|increase|improve|treat|manage|prevent|lower|raise|decrease|control|maintain|provide|support)\s+(.+?)(?:\.(?:\s|$))",
+        text, re.IGNORECASE,
+    )
+    if m:
+        return _clean(m.group(1))[:100]
+
+    # "indicated in/for/as [adjunct/combination/etc] [with] CONDITION"
+    m = re.search(
+        r"indicated\s+(?:as\s+(?:an?\s+)?(?:adjunct|add-on|first-line|second-line|monotherapy|combination|alternative|supplement|replacement|initial|maintenance)\s*(?:therapy|treatment|regimen|agent|option)?\s*(?:to|for|in|with)\s+|in\s+(?:combination\s+with\s+.+?\s+for\s+|adults?\s+(?:and\s+pediatric\s+patients?\s+)?(?:aged?\s+\d+\s+(?:years?\s+)?(?:and\s+older(?:\s+patients?\s+)?)?\s+)?with\s+|patients?\s+(?:aged?\s+\S+\s+)?with\s+|pediatric\s+patients\s+\S+\s+with\s+))(.+?)(?:\.(?:\s|$))",
+        text, re.IGNORECASE,
+    )
+    if m:
+        return _clean(m.group(1))[:100]
+
+    # "DRUG [is a/an ... antagonist/inhibitor] indicated for/in/to CONDITION"
+    if clean_name:
+        m = re.search(
+            re.escape(clean_name) + r"\s+(?:\([^)]*\)\s+)?(?:injection|tablet|capsule|cream|solution|for\s+injection)?\s*(?:is\s+(?:a\s+|an\s+)?\S+(?:\s+and\s+\S+)?\s+(?:antagonist|inhibitor|agonist|blocker|stimulant|modulator|therapy|treatment|antibody|receptor|product|medicine|drug|combination)\s+)?indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))",
+            text, re.IGNORECASE,
+        )
+        if m:
+            return _clean(m.group(1))[:100]
+
+    # Generic: "indicated for/in/to/as CONDITION"
+    m = re.search(r"indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))", text, re.IGNORECASE)
+    if m:
+        return _clean(m.group(1))[:100]
+
+    # Fallback: first sentence
+    m = re.search(r"(.+?)\.(?:\s|$)", text)
+    if m:
+        return m.group(1).strip()[:100]
+    return text[:80].strip()
+
+
+def truncate_indication(text, max_length=100):
+    """Backward-compatible wrapper: returns extract_short_indication result."""
+    return extract_short_indication(text)
 
 
 def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100):
@@ -443,15 +534,19 @@ def main():
             # Check if we can reuse cached label data
             if args.cache and app_num in previous_data and previous_data[app_num].get("label"):
                 drug["label"] = previous_data[app_num]["label"]
-                drug["indication_preview"] = previous_data[app_num].get("indication_preview", "")
+                drug["indication_preview"] = extract_short_indication(
+                    drug["label"].get("indications_and_usage", [""])[0] if isinstance(drug["label"].get("indications_and_usage"), list) else drug["label"].get("indications_and_usage", ""),
+                    brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
+                )
                 print(f"  [{i}/{len(drugs)}] {name} (cached)", file=sys.stderr)
             else:
                 print(f"  [{i}/{len(drugs)}] {name}...", file=sys.stderr)
                 label = fetch_label(drug)
                 drug["label"] = label
                 if label:
-                    drug["indication_preview"] = truncate_indication(
-                        label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", "")
+                    drug["indication_preview"] = extract_short_indication(
+                        label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", ""),
+                        brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
                     )
                 else:
                     drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
