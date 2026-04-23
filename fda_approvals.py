@@ -10,6 +10,7 @@ Usage:
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -21,6 +22,7 @@ from urllib.parse import quote
 
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
+LABEL_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".label_cache.json")
 
 EFFICACY_SUPPL_CODES = {"EFFICACY"}
 
@@ -311,6 +313,7 @@ def fetch_label(drug):
                 label_data[field] = val
 
         label_data["openfda"] = label.get("openfda", {})
+        label_data["set_id"] = label.get("id", "")
         return label_data
 
     except HTTPError as e:
@@ -319,6 +322,35 @@ def fetch_label(drug):
         name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
         print(f"  Warning: HTTP {e.code} fetching label for {name}", file=sys.stderr)
         return None
+
+
+def load_previous_approvals(path="data/approvals.json"):
+    """Load previous run's approvals.json to reuse label data for cached drugs."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        prev = {}
+        for drug in data.get("drugs", []):
+            app_num = drug.get("application_number", "")
+            if app_num and drug.get("label"):
+                prev[app_num] = drug
+        return prev
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_label_cache(drugs, cache_path):
+    """Save app_num → set_id mapping for future incremental runs."""
+    cache = {}
+    for drug in drugs:
+        app_num = drug.get("application_number", "")
+        label = drug.get("label")
+        if app_num and label and label.get("set_id"):
+            cache[app_num] = label["set_id"]
+    with open(cache_path, "w") as f:
+        json.dump(cache, f, indent=2)
 
 
 def main():
@@ -349,6 +381,10 @@ def main():
     parser.add_argument(
         "--skip-labels", action="store_true",
         help="Skip label fetching (only return drugsfda data)"
+    )
+    parser.add_argument(
+        "--cache", action="store_true",
+        help="Use cached label data from previous run to skip re-fetching unchanged labels"
     )
 
     args = parser.parse_args()
@@ -385,18 +421,37 @@ def main():
         print(f"After deduplication: {len(drugs)} unique approval events.", file=sys.stderr)
 
     if not args.skip_labels:
+        # Load previous label data when --cache is provided
+        previous_data = load_previous_approvals() if args.cache else {}
+        if args.cache:
+            cached_count = sum(1 for d in drugs if d.get("application_number") in previous_data and previous_data[d["application_number"]].get("label"))
+            print(f"Cache: {cached_count} previously fetched labels available.", file=sys.stderr)
+
         print("Fetching labels...", file=sys.stderr)
         for i, drug in enumerate(drugs, 1):
             name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
-            print(f"  [{i}/{len(drugs)}] {name}...", file=sys.stderr)
-            label = fetch_label(drug)
-            drug["label"] = label
-            if label:
-                drug["indication_preview"] = truncate_indication(
-                    label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", "")
-                )
+            app_num = drug.get("application_number", "")
+
+            # Check if we can reuse cached label data
+            if args.cache and app_num in previous_data and previous_data[app_num].get("label"):
+                drug["label"] = previous_data[app_num]["label"]
+                drug["indication_preview"] = previous_data[app_num].get("indication_preview", "")
+                print(f"  [{i}/{len(drugs)}] {name} (cached)", file=sys.stderr)
             else:
-                drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+                print(f"  [{i}/{len(drugs)}] {name}...", file=sys.stderr)
+                label = fetch_label(drug)
+                drug["label"] = label
+                if label:
+                    drug["indication_preview"] = truncate_indication(
+                        label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", "")
+                    )
+                else:
+                    drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+
+        # Save label cache after processing
+        if args.cache:
+            save_label_cache(drugs, LABEL_CACHE_PATH)
+            print(f"Label cache written to {LABEL_CACHE_PATH}", file=sys.stderr)
     else:
         for drug in drugs:
             drug["label"] = None

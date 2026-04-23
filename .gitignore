@@ -35,3 +35,6 @@ site/
 *.json
 !package.json
 !.planning/*.json
+
+# Label cache (derived data, not version-controlled)
+data/.label_cache.json
