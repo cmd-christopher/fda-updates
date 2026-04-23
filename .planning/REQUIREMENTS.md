@@ -45,10 +45,10 @@
 
 ### Automation
 
-- [ ] **AUTO-01**: systemd user service runs the data fetch script on a weekly schedule
-- [ ] **AUTO-02**: systemd timer triggers the service weekly
+- [x] **AUTO-01**: systemd user service runs the data fetch script on a weekly schedule
+- [x] **AUTO-02**: systemd timer triggers the service weekly
 - [ ] **AUTO-03**: Build script (build.py) generates static HTML from the JSON data file
-- [ ] **AUTO-04**: Automated git push to Synology after successful build
+- [x] **AUTO-04**: Automated git push to Synology after successful build
 - [ ] **AUTO-05**: Site shows "last updated" date derived from the data file timestamp
 
 ## v2 Requirements
@@ -109,9 +109,9 @@
 | DETAIL-04 | Phase 3 | Complete |
 | DETAIL-05 | Phase 3 | Complete |
 | DETAIL-06 | Phase 3 | Complete |
-| AUTO-01 | Phase 4 | Pending |
-| AUTO-02 | Phase 4 | Pending |
-| AUTO-04 | Phase 4 | Pending |
+| AUTO-01 | Phase 4 | Complete |
+| AUTO-02 | Phase 4 | Complete |
+| AUTO-04 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 28 total

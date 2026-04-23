@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Data Pipeline** - Extend fda_approvals.py to fetch both NME and SUPPL approvals and produce a stable JSON data contract
 - [x] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
 - [x] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
-- [ ] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
+- [x] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
 
 ## Phase Details
 
@@ -74,7 +74,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Pipeline failures produce visible errors (non-zero exit code, no silent stale data)
 **Plans**: 2 plans in 2 waves
 - [x] 04-01-PLAN.md — Incremental label fetching: add --cache flag and set_id to fda_approvals.py, create label cache
-- [ ] 04-02-PLAN.md — Pipeline automation: run_fda_pipeline.sh wrapper, systemd service + timer, Pushover failure notification
+- [x] 04-02-PLAN.md — Pipeline automation: run_fda_pipeline.sh wrapper, systemd service + timer, Pushover failure notification
 
 ## Progress
 
@@ -86,4 +86,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
 | 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
 | 3. Drug Detail Pages | 2/2 | Complete | 2026-04-23 |
-| 4. Automation & Deployment | 1/2 | In Progress | - |
+| 4. Automation & Deployment | 2/2 | Complete | 2026-04-23 |

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-22)
 ## Current Position
 
 Phase: 4 of 4 (Automation & Deployment)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-04-23 — Plan 04-01 complete (incremental label cache)
+Plan: 2 of 2 complete
+Status: Phase Complete
+Last activity: 2026-04-23 — Plan 04-02 complete (pipeline automation with systemd timer)
 
-Progress: [████████░] 87%
+Progress: [█████████] 100%
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: [████████░] 87%
 | 1. Data Pipeline | 2 | ~2h | ~1h |
 | 2. Site Shell & Index | 2 | ~20min | ~10min |
 | 3. Drug Detail Pages | 2 | ~27min | ~14min |
-| 4. Automation & Deployment | 1/2 | ~22min | ~22min |
+| 4. Automation & Deployment | 2/2 | ~24min | ~12min |
 
 **Recent Trend:**
 - Last 5 plans: Phase 1 Plans 01-02, Phase 2 Plans 01-02 (all complete)
@@ -52,7 +52,7 @@ Recent decisions affecting current work:
 - [Phase 2]: System auto-detect + manual toggle for dark mode (localStorage)
 - [Phase 3-01]: Regex-based HTML sanitizer (no external deps), slug collision detection via app number digits
 - [Phase 3-02]: Native <details> for collapsible sections, root_path for subdirectory asset paths
-- [Phase 4-01]: Incremental label fetching via --cache flag and set_id cache (D-02, D-03); cache self-heals on missing set_id
+- [Phase 4-02]: Weekly pipeline automation with systemd timer, Pushover failure notifications, no-change detection
 
 ### Pending Todos
 
@@ -75,5 +75,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-23
-Stopped at: Plan 04-01 complete (incremental label cache with --cache flag)
-Resume file: .planning/phases/04-automation-deployment/
+Stopped at: Phase 4 Plan 02 complete — all phases done
+Resume file: None (milestone complete)
