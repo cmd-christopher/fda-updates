@@ -29,7 +29,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Approval dates reflect the actual ORIG/SUPPL approval date, not the most recent submission date (sort pitfall avoided)
   4. Missing label data (404s) produces null label fields without crashing the script
   5. Running build.py generates skeleton HTML from the JSON data file
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+- [ ] 01-01-PLAN.md — SUPPL data extension: fetch ORIG + efficacy SUPPL approvals, add type badges, indication preview, slug
+- [ ] 01-02-PLAN.md — Build skeleton + pipeline validation: create build.py, Jinja2 templates, end-to-end verification
 
 ### Phase 2: Site Shell & Index Page
 **Goal**: Physicians can browse a sortable, mobile-friendly table of recent drug approvals with clear type badges
