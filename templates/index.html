@@ -2,34 +2,39 @@
 
 {% block title %}FDA Drug Approvals{% endblock %}
 
+{% block main_attrs %} id="drug-table"{% endblock %}
+
 {% block content %}
 {% if drugs %}
+<div class="search-container">
+    <input class="search search-input" placeholder="Search by drug name..." aria-label="Search drug approvals">
+</div>
 <table>
     <thead>
         <tr>
-            <th>Date</th>
+            <th class="sort" data-sort="date" data-sort-type="date">Date</th>
             <th>Type</th>
-            <th>Brand Name</th>
-            <th>Generic Name</th>
-            <th>Category</th>
+            <th class="sort" data-sort="name">Brand Name</th>
+            <th class="sort" data-sort="generic">Generic Name</th>
+            <th class="sort" data-sort="category">Category</th>
             <th>Indication</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody class="list">
     {% for drug in drugs %}
         <tr>
-            <td data-sort="{{ drug.approval_date }}">{{ drug.approval_date | format_date }}</td>
-            <td>
+            <td class="date" data-label="Date" data-timestamp="{{ drug.approval_date }}">{{ drug.approval_date | format_date }}</td>
+            <td data-label="Type">
             {% if drug.type_badge == "New Drug" %}
-                <span class="badge badge-new-drug">{{ drug.type_badge }}</span>
+                <span class="badge badge-new-drug type">{{ drug.type_badge }}</span>
             {% else %}
-                <span class="badge badge-new-indication">{{ drug.type_badge }}</span>
+                <span class="badge badge-new-indication type">{{ drug.type_badge }}</span>
             {% endif %}
             </td>
-            <td><a href="drugs/{{ drug.slug }}.html">{{ drug.brand_name or drug.generic_name or "Unknown" }}</a></td>
-            <td>{{ drug.generic_name or "&mdash;" }}</td>
-            <td>{{ drug.pharm_class_epc[0].split(' [EPC]')[0] if drug.pharm_class_epc else "&mdash;" }}</td>
-            <td>{{ drug.indication_preview or "&mdash;" }}</td>
+            <td class="name" data-label="Brand Name"><a href="drugs/{{ drug.slug }}.html">{{ drug.brand_name or drug.generic_name or "Unknown" }}</a></td>
+            <td class="generic" data-label="Generic Name">{{ drug.generic_name or "&mdash;" }}</td>
+            <td class="category" data-label="Category">{{ drug.pharm_class_epc[0].split(' [EPC]')[0] if drug.pharm_class_epc else "&mdash;" }}</td>
+            <td data-label="Indication">{{ drug.indication_preview or "&mdash;" }}</td>
         </tr>
     {% endfor %}
     </tbody>
