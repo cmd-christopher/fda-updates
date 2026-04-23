@@ -34,7 +34,7 @@
             <td class="name" data-label="Brand Name"><a href="drugs/{{ drug.slug }}.html">{{ drug.brand_name or drug.generic_name or "Unknown" }}</a></td>
             <td class="generic" data-label="Generic Name">{{ drug.generic_name or "—" }}</td>
             <td class="category" data-label="Category">{{ drug.pharm_class_epc[0].split(' [EPC]')[0] if drug.pharm_class_epc else "—" }}</td>
-            <td data-label="Indication">{{ drug.indication_summary or drug.indication_preview or "—" }}</td>
+            <td data-label="Indication">{{ (drug.indication_summary or drug.indication_preview or "—").title() }}</td>
         </tr>
     {% endfor %}
     </tbody>
