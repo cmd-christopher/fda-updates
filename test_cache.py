@@ -118,6 +118,24 @@ class TestSaveLabelCache(unittest.TestCase):
         finally:
             os.unlink(cache_path)
 
+    def test_creates_parent_directory(self):
+        """save_label_cache creates parent directory if needed."""
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        try:
+            nested_path = os.path.join(tmpdir, "subdir", "cache.json")
+            drugs = [
+                {"application_number": "NDA111", "label": {"set_id": "uuid-aaa"}},
+            ]
+            fda_approvals.save_label_cache(drugs, nested_path)
+            self.assertTrue(os.path.exists(nested_path))
+            with open(nested_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["NDA111"], "uuid-aaa")
+        finally:
+            import shutil
+            shutil.rmtree(tmpdir)
+
 
 class TestFetchLabelSetId(unittest.TestCase):
     """Test that fetch_label() includes set_id in returned label dict."""

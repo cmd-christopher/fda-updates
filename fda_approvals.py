@@ -349,6 +349,7 @@ def save_label_cache(drugs, cache_path):
         label = drug.get("label")
         if app_num and label and label.get("set_id"):
             cache[app_num] = label["set_id"]
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(cache, f, indent=2)
 
