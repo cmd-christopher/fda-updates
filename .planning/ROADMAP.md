@@ -12,7 +12,7 @@ This project delivers a static website that keeps physicians informed about new 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Data Pipeline** - Extend fda_approvals.py to fetch both NME and SUPPL approvals and produce a stable JSON data contract
+- [x] **Phase 1: Data Pipeline** - Extend fda_approvals.py to fetch both NME and SUPPL approvals and produce a stable JSON data contract
 - [ ] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
 - [ ] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
 - [ ] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
@@ -30,8 +30,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Missing label data (404s) produces null label fields without crashing the script
   5. Running build.py generates skeleton HTML from the JSON data file
 **Plans**: 2 plans in 2 waves
-- [ ] 01-01-PLAN.md — SUPPL data extension: fetch ORIG + efficacy SUPPL approvals, add type badges, indication preview, slug
-- [ ] 01-02-PLAN.md — Build skeleton + pipeline validation: create build.py, Jinja2 templates, end-to-end verification
+- [x] 01-01-PLAN.md — SUPPL data extension: fetch ORIG + efficacy SUPPL approvals, add type badges, indication preview, slug
+- [x] 01-02-PLAN.md — Build skeleton + pipeline validation: create build.py, Jinja2 templates, end-to-end verification
 
 ### Phase 2: Site Shell & Index Page
 **Goal**: Physicians can browse a sortable, mobile-friendly table of recent drug approvals with clear type badges
@@ -43,7 +43,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Each row has a visible type badge distinguishing "New Drug" from "New Indication"
   4. Site displays in Orchid & Teal palette with dark mode support and mobile-responsive layout
   5. "Last updated" freshness indicator and cross-link to medupdates.wilmsfamily.com are visible on every page
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+- [ ] 02-01-PLAN.md — Site shell: custom.css (Orchid & Teal table/card/dark mode), List.js asset, base.html (toggle + cross-link)
+- [ ] 02-02-PLAN.md — Index page: List.js sort/search, mobile card markup, main.js (dark mode + List.js init), build.py updates
 **UI hint**: yes
 
 ### Phase 3: Drug Detail Pages
@@ -76,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Pipeline | 0/? | Not started | - |
-| 2. Site Shell & Index Page | 0/? | Not started | - |
+| 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
+| 2. Site Shell & Index Page | 0/2 | Ready to execute | - |
 | 3. Drug Detail Pages | 0/? | Not started | - |
 | 4. Automation & Deployment | 0/? | Not started | - |
