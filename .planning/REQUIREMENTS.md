@@ -103,8 +103,8 @@
 | SITE-04 | Phase 2 | Pending |
 | SITE-05 | Phase 2 | Pending |
 | AUTO-05 | Phase 2 | Pending |
-| DETAIL-01 | Phase 3 | Pending |
-| DETAIL-02 | Phase 3 | Pending |
+| DETAIL-01 | Phase 3 | Complete |
+| DETAIL-02 | Phase 3 | Complete |
 | DETAIL-03 | Phase 3 | Pending |
 | DETAIL-04 | Phase 3 | Pending |
 | DETAIL-05 | Phase 3 | Pending |
