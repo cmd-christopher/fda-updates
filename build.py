@@ -2,10 +2,40 @@
 """Build the FDA drug approvals static site from JSON data."""
 
 import json
+import re
 import sys
 import os
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
+
+
+def sanitize_html(text):
+    """Strip dangerous HTML content, preserve safe structural tags.
+
+    Removes: <script>, <style>, <iframe> tags and their content.
+    Removes: event attributes (onclick, onerror, onload, onmouseover, etc.).
+    Removes: style attributes.
+    Preserves: safe structural tags (table, p, br, ul, ol, li, b, i, strong,
+               em, h1-h6, sub, sup, div, span, a, thead, tbody, tr, td, th).
+
+    Returns a Markup object marked safe for Jinja2 rendering.
+    """
+    if not text:
+        return Markup("")
+
+    # Strip <script>, <style>, <iframe> tags and their content
+    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<iframe[^>]*>.*?</iframe>", "", text, flags=re.DOTALL | re.IGNORECASE)
+
+    # Strip event attributes (on*="...")
+    text = re.sub(r'\s+on\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', "", text, flags=re.IGNORECASE)
+
+    # Strip style attributes
+    text = re.sub(r'\s+style\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', "", text, flags=re.IGNORECASE)
+
+    return Markup(text)
 
 
 DATA_PATH = "data/approvals.json"
@@ -57,6 +87,16 @@ def main():
                 print(f"Error: Missing required field '{field}' in {name}", file=sys.stderr)
                 sys.exit(1)
 
+    # Resolve slug collisions — append digits from application_number
+    slug_counts = {}
+    for drug in drugs:
+        slug = drug["slug"]
+        if slug in slug_counts:
+            # Extract numeric digits from application_number (e.g., "NDA123456" → "123456")
+            digits = re.sub(r"\D", "", drug.get("application_number", ""))
+            drug["slug"] = f"{slug}-{digits}" if digits else f"{slug}-{slug_counts[slug]}"
+        slug_counts[drug["slug"]] = slug_counts.get(drug["slug"], 0) + 1
+
     # Compute last_updated from data metadata (AUTO-05)
     query_meta = data.get("query", {})
     date_to = query_meta.get("date_to")
@@ -78,6 +118,7 @@ def main():
         autoescape=select_autoescape(["html", "xml"]),
     )
     env.filters["format_date"] = format_date
+    env.filters["sanitize_html"] = sanitize_html
 
     template = env.get_template("index.html")
     html = template.render(
@@ -90,6 +131,22 @@ def main():
         f.write(html)
 
     print(f"Built {output_path} with {len(drugs)} drug approvals (data through {date_to or 'unknown'})")
+
+    # Generate detail pages for each drug
+    drugs_dir = os.path.join(OUTPUT_DIR, "drugs")
+    os.makedirs(drugs_dir, exist_ok=True)
+
+    detail_template = env.get_template("drug_detail.html")
+    for drug in drugs:
+        detail_html = detail_template.render(
+            drug=drug,
+            last_updated=last_updated,
+        )
+        detail_path = os.path.join(drugs_dir, f"{drug['slug']}.html")
+        with open(detail_path, "w") as f:
+            f.write(detail_html)
+
+    print(f"Built {len(drugs)} drug detail pages in {drugs_dir}")
 
 
 if __name__ == "__main__":

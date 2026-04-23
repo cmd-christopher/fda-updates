@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}{{ drug.brand_name or drug.generic_name or "Unknown" }} — FDA Prescribing Information{% endblock %}
+
+{% block content %}
+<article>
+  <h2>{{ drug.brand_name or drug.generic_name or "Unknown" }}</h2>
+  <p>Detail page placeholder — template will be completed in Plan 02.</p>
+</article>
+{% endblock %}
