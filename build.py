@@ -124,6 +124,7 @@ def main():
     html = template.render(
         drugs=drugs,
         last_updated=last_updated,
+        root_path="",
     )
 
     output_path = os.path.join(OUTPUT_DIR, "index.html")
@@ -141,6 +142,7 @@ def main():
         detail_html = detail_template.render(
             drug=drug,
             last_updated=last_updated,
+            root_path="../",
         )
         detail_path = os.path.join(drugs_dir, f"{drug['slug']}.html")
         with open(detail_path, "w") as f:

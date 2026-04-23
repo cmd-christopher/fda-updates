@@ -3,8 +3,103 @@
 {% block title %}{{ drug.brand_name or drug.generic_name or "Unknown" }} — FDA Prescribing Information{% endblock %}
 
 {% block content %}
-<article>
-  <h2>{{ drug.brand_name or drug.generic_name or "Unknown" }}</h2>
-  <p>Detail page placeholder — template will be completed in Plan 02.</p>
+<nav class="detail-nav">
+  <a href="../index.html">← Back to Drug Approvals</a>
+</nav>
+
+<article class="drug-detail">
+{% if drug.label %}
+  <div class="drug-header">
+    <h1>{{ drug.brand_name or drug.generic_name or "Unknown" }}</h1>
+    {% if drug.brand_name and drug.generic_name and drug.brand_name != drug.generic_name %}
+      <p class="drug-generic">{{ drug.generic_name }}</p>
+    {% endif %}
+    {% if drug.type_badge == "New Drug" %}
+      <span class="badge badge-new-drug">{{ drug.type_badge }}</span>
+    {% else %}
+      <span class="badge badge-new-indication">{{ drug.type_badge }}</span>
+    {% endif %}
+  </div>
+
+  <div class="detail-meta">
+    <div class="meta-item">
+      <span class="meta-label">Approved</span>
+      <span class="meta-value">{{ drug.approval_date | format_date }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Manufacturer</span>
+      <span class="meta-value">{{ drug.manufacturer_name | join(", ") if drug.manufacturer_name else "—" }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Route</span>
+      <span class="meta-value">{{ drug.route[0] if drug.route else "—" }}</span>
+    </div>
+    {% if drug.products and drug.products[0].get("dosage_form") %}
+    <div class="meta-item">
+      <span class="meta-label">Dosage Form</span>
+      <span class="meta-value">{{ drug.products[0].dosage_form }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if drug.label.get("boxed_warning") %}
+  <div class="boxed-warning">
+    <h3>&#9888; Boxed Warning</h3>
+    <div class="warning-content">
+      {% for paragraph in drug.label.boxed_warning %}
+        {{ paragraph | sanitize_html }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% set sections = [
+    ("indications_and_usage", "Indications &amp; Usage", 1, True),
+    ("dosage_and_administration", "Dosage &amp; Administration", 2, True),
+    ("dosage_forms_and_strengths", "Dosage Forms &amp; Strengths", 3, True),
+    ("contraindications", "Contraindications", 4, True),
+    ("warnings_and_cautions", "Warnings &amp; Precautions", 5, True),
+    ("adverse_reactions", "Adverse Reactions", 6, False),
+    ("drug_interactions", "Drug Interactions", 7, False),
+    ("use_in_specific_populations", "Use in Specific Populations", 8, False),
+    ("overdosage", "Overdosage", 10, True),
+    ("description", "Description", 11, True),
+    ("mechanism_of_action", "Mechanism of Action", 12, True),
+    ("clinical_pharmacology", "Clinical Pharmacology", 12, False),
+    ("clinical_studies", "Clinical Studies", 14, False),
+    ("nonclinical_toxicology", "Nonclinical Toxicology", 13, False),
+  ] %}
+
+  {% for section_key, section_title, section_num, default_open in sections %}
+    {% if drug.label.get(section_key) %}
+  <details {% if default_open %}open{% endif %} class="pi-section">
+    <summary><span class="section-number">{{ section_num }}.</span> {{ section_title }}</summary>
+    <div class="section-content">
+      {% for paragraph in drug.label[section_key] %}
+        {{ paragraph | sanitize_html }}
+      {% endfor %}
+    </div>
+  </details>
+    {% endif %}
+  {% endfor %}
+
+{% else %}
+  <div class="drug-header">
+    <h1>{{ drug.brand_name or drug.generic_name or "Unknown" }}</h1>
+    {% if drug.type_badge == "New Drug" %}
+      <span class="badge badge-new-drug">{{ drug.type_badge }}</span>
+    {% else %}
+      <span class="badge badge-new-indication">{{ drug.type_badge }}</span>
+    {% endif %}
+  </div>
+
+  <div class="empty-state">
+    <h2>Prescribing Information Not Yet Available</h2>
+    <p>Full prescribing information for {{ drug.brand_name or drug.generic_name }}
+       is not yet available from the FDA. This sometimes occurs with very recent approvals.</p>
+    <p>Check the official source:
+       <a href="https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={{ drug.application_number | replace('NDA', '') | replace('BLA', '') | replace('ANDA', '') }}">View on Drugs@FDA</a></p>
+  </div>
+{% endif %}
 </article>
 {% endblock %}
