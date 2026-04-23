@@ -13,7 +13,7 @@ This project delivers a static website that keeps physicians informed about new 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Data Pipeline** - Extend fda_approvals.py to fetch both NME and SUPPL approvals and produce a stable JSON data contract
-- [ ] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
+- [x] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
 - [ ] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
 - [ ] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
 
@@ -44,8 +44,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Site displays in Orchid & Teal palette with dark mode support and mobile-responsive layout
   5. "Last updated" freshness indicator and cross-link to medupdates.wilmsfamily.com are visible on every page
 **Plans**: 2 plans in 2 waves
-- [ ] 02-01-PLAN.md — Site shell: custom.css (Orchid & Teal table/card/dark mode), List.js asset, base.html (toggle + cross-link)
-- [ ] 02-02-PLAN.md — Index page: List.js sort/search, mobile card markup, main.js (dark mode + List.js init), build.py updates
+- [x] 02-01-PLAN.md — Site shell: custom.css (Orchid & Teal table/card/dark mode), List.js asset, base.html (toggle + cross-link)
+- [x] 02-02-PLAN.md — Index page: List.js sort/search, mobile card markup, main.js (dark mode + List.js init), build.py updates
 **UI hint**: yes
 
 ### Phase 3: Drug Detail Pages
@@ -79,6 +79,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
-| 2. Site Shell & Index Page | 0/2 | Ready to execute | - |
+| 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
 | 3. Drug Detail Pages | 0/? | Not started | - |
 | 4. Automation & Deployment | 0/? | Not started | - |

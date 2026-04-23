@@ -10,28 +10,29 @@ See: .planning/PROJECT.md (updated 2026-04-22)
 ## Current Position
 
 Phase: 2 of 4 (Site Shell & Index Page)
-Plan: 0 of 2 in current phase
-Status: Ready to execute
-Last activity: 2026-04-23 — Phase 2 planned (2 plans in 2 waves)
+Plan: 2 of 2 in current phase
+Status: Complete
+Last activity: 2026-04-23 — Phase 2 executed (2 plans complete)
 
-Progress: [██░░░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: -
-- Total execution time: ~2 hours
+- Total plans completed: 4
+- Average duration: ~10 min/plan
+- Total execution time: ~2.5 hours (Phase 1 ~2h, Phase 2 ~20min)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1. Data Pipeline | 2 | - | - |
+| 1. Data Pipeline | 2 | ~2h | ~1h |
+| 2. Site Shell & Index | 2 | ~20min | ~10min |
 
 **Recent Trend:**
-- Last 5 plans: Phase 1 Plans 01-02 (both complete)
-- Trend: First execution cycle
+- Last 5 plans: Phase 1 Plans 01-02, Phase 2 Plans 01-02 (all complete)
+- Trend: Accelerating — Phase 2 was ~10x faster than Phase 1
 
 ## Accumulated Context
 
@@ -68,5 +69,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-23
-Stopped at: Phase 2 context gathered, ready to plan
-Resume file: .planning/phases/02-site-shell/02-01-PLAN.md
+Stopped at: Phase 2 complete, ready for Phase 3 planning
+Resume file: .planning/phases/03-drug-detail/
