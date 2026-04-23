@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly FDA Drug Approval Data Pipeline
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/christopher/Repos/fda-updates
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env bash /home/christopher/Repos/fda-updates/run_fda_pipeline.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=default.target
