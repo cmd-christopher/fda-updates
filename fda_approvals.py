@@ -23,6 +23,10 @@ from urllib.parse import quote
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
 LABEL_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".label_cache.json")
+INDICATION_SUMMARIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".indication_summaries.json")
+LLM_API_URL = "https://ollama.com/v1/chat/completions"
+LLM_MODEL = "cogito-2.1:671b"
+LLM_BATCH_SIZE = 10
 
 EFFICACY_SUPPL_CODES = {"EFFICACY"}
 
@@ -156,6 +160,107 @@ def extract_short_indication(text, brand_name=""):
 def truncate_indication(text, max_length=100):
     """Backward-compatible wrapper: returns extract_short_indication result."""
     return extract_short_indication(text)
+
+
+def load_indication_summaries(path=INDICATION_SUMMARIES_PATH):
+    """Load previously LLM-summarized indications from cache."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_indication_summaries(summaries, path=INDICATION_SUMMARIES_PATH):
+    """Save LLM-summarized indications to cache."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(summaries, f, indent=2, sort_keys=True)
+
+
+def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_BATCH_SIZE):
+    """Use LLM to produce concise 1-4 word condition names from verbose FDA indications.
+
+    Batches drugs to minimize API calls. Uses cached summaries for previously processed drugs.
+    """
+    to_process = []
+    for drug in drugs:
+        app_num = drug.get("application_number", "")
+        if app_num and app_num in summaries_cache:
+            drug["indication_summary"] = summaries_cache[app_num]
+        else:
+            label = drug.get("label") or {}
+            ind_text = ""
+            if label and label.get("indications_and_usage"):
+                raw = label["indications_and_usage"]
+                ind_text = raw[0] if isinstance(raw, list) else raw
+            if not ind_text:
+                ind_text = drug.get("submission_class", "") or drug.get("submission_type", "")
+            if ind_text:
+                to_process.append((app_num, drug.get("brand_name", "") or drug.get("generic_name", ""), ind_text))
+
+    if not to_process:
+        return
+
+    print(f"Summarizing {len(to_process)} indications via LLM (batches of {batch_size})...", file=sys.stderr)
+
+    for batch_start in range(0, len(to_process), batch_size):
+        batch = to_process[batch_start:batch_start + batch_size]
+        lines = []
+        for app_num, brand, text in batch:
+            short_text = text[:300] if len(text) > 300 else text
+            lines.append(f"{app_num}|{brand}|{short_text}")
+
+        prompt_lines = [
+            "For each drug below, extract ONLY the primary condition/disease name. 1-4 words max, no explanation.",
+            "Format: APP_NUM|condition_name",
+            "",
+        ]
+        for app_num, brand, text in batch:
+            prompt_lines.append(f"{app_num}|{text[:300]}")
+
+        prompt = "\n".join(prompt_lines)
+
+        data = json.dumps({
+            "model": LLM_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 500,
+        }).encode()
+
+        req = Request(
+            LLM_API_URL,
+            data=data,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+
+        try:
+            with urlopen(req, timeout=60) as resp:
+                result = json.loads(resp.read().decode())
+                content = result["choices"][0]["message"]["content"].strip()
+
+            for line in content.strip().split("\n"):
+                line = line.strip()
+                if "|" in line:
+                    parts = line.split("|", 1)
+                    app_num = parts[0].strip()
+                    condition = parts[1].strip().strip('"').strip("'")
+                    if app_num and condition:
+                        summaries_cache[app_num] = condition
+                        for drug in drugs:
+                            if drug.get("application_number") == app_num:
+                                drug["indication_summary"] = condition
+
+        except Exception as e:
+            print(f"  Warning: LLM summarization batch failed: {e}", file=sys.stderr)
+            for app_num, brand, text in batch:
+                summaries_cache[app_num] = brand
+                for drug in drugs:
+                    if drug.get("application_number") == app_num:
+                        drug["indication_summary"] = drug.get("brand_name", "") or drug.get("generic_name", "")
+
+        time.sleep(0.5)
 
 
 def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100):
@@ -478,8 +583,18 @@ def main():
         "--cache", action="store_true",
         help="Use cached label data from previous run to skip re-fetching unchanged labels"
     )
+    parser.add_argument(
+        "--summarize", action="store_true",
+        help="Use LLM to generate concise 1-4 word condition summaries for the indication column"
+    )
+    parser.add_argument(
+        "--llm-api-key", default=None,
+        help="API key for the LLM service (or set LLM_API_KEY env var)"
+    )
 
     args = parser.parse_args()
+
+    llm_key = args.llm_api_key or os.environ.get("LLM_API_KEY", "")
 
     date_from = datetime.strptime(args.date_from, "%Y-%m-%d")
     date_to = datetime.strptime(args.date_to, "%Y-%m-%d")
@@ -559,6 +674,17 @@ def main():
         for drug in drugs:
             drug["label"] = None
             drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+
+    # LLM-based indication summarization
+    if args.summarize:
+        if not llm_key:
+            print("Warning: --summarize requires --llm-api-key or LLM_API_KEY env var. Skipping.", file=sys.stderr)
+        else:
+            summaries_cache = load_indication_summaries()
+            summarize_indications_batch(drugs, llm_key, summaries_cache)
+            save_indication_summaries(summaries_cache)
+            summarized = sum(1 for d in drugs if d.get("indication_summary"))
+            print(f"Summarized {summarized}/{len(drugs)} indications via LLM", file=sys.stderr)
 
     output = {
         "query": {

@@ -37,4 +37,4 @@ site/
 !.planning/*.json
 
 # Label cache (derived data, not version-controlled)
-data/.label_cache.json
+data/.label_cache.jsondata/.indication_summaries.json
