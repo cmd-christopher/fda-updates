@@ -12,7 +12,8 @@ Physicians can quickly see what new drugs and new indications have been approved
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Clicking a drug row navigates to a detail page with full structured prescribing information — Validated in Phase 3
+- [x] Detail page includes: indications & usage, boxed warning, dosing & administration, dosage forms & strengths, contraindications, warnings & precautions, adverse reactions, drug interactions, use in specific populations, mechanism of action, and other available label sections — Validated in Phase 3
 
 ### Active
 
@@ -58,11 +59,11 @@ Physicians can quickly see what new drugs and new indications have been approved
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| NMEs + new indications mixed with type flag | Physicians care about both new drugs and new indications for drugs they already prescribe — a single list with clear type differentiation is most useful | — Pending |
-| Sortable table for main page | Table format lets physicians sort by date, drug name, or category — most scannable for quick reference | — Pending |
-| Full structured PI on detail pages | Physicians need complete prescribing information for clinical decisions; curated summaries risk omitting critical safety data | — Pending |
-| systemd timer weekly, not cron | User preference for systemd; weekly cadence matches FDA data update frequency and minimizes API calls | — Pending |
-| ~2 year date window default | Physician asked for 2 years of data visibility on main page | — Pending |
+| NMEs + new indications mixed with type flag | Physicians care about both new drugs and new indications for drugs they already prescribe — a single list with clear type differentiation is most useful | Validated in Phase 1 |
+| Sortable table for main page | Table format lets physicians sort by date, drug name, or category — most scannable for quick reference | Validated in Phase 2 |
+| Full structured PI on detail pages | Physicians need complete prescribing information for clinical decisions; curated summaries risk omitting critical safety data | Validated in Phase 3 |
+| systemd timer weekly, not cron | User preference for systemd; weekly cadence matches FDA data update frequency and minimizes API calls | — Pending (Phase 4) |
+| ~2 year date window default | Physician asked for 2 years of data visibility on main page | Validated in Phase 1 |
 
 ---
-*Last updated: 2026-04-22 after initialization*
+*Last updated: 2026-04-23 after Phase 3 completion*
