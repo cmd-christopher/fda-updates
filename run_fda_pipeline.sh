@@ -11,8 +11,8 @@ SITE_DIR="${SCRIPT_DIR}/site"
 ENV_FILE="$HOME/.config/fda-pipeline/.env"
 
 # ─── Load environment ───────────────────────────────────────────────
-# Per D-07: Pushover keys stored in ~/.config/fda-pipeline/.env
-# File contains: PUSHOVER_APP_KEY=... and PUSHOVER_USER_KEY=...
+# Per D-07: Pushover keys and LLM API key stored in ~/.config/fda-pipeline/.env
+# File contains: PUSHOVER_APP_KEY=..., PUSHOVER_USER_KEY=..., LLM_API_KEY=...
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   source "$ENV_FILE"
@@ -51,10 +51,12 @@ PIPELINE_STEP="fetch"
 
 # Per D-02/D-03: Use --cache for incremental label fetching
 # Per D-01: Full 2-year window always
+# --summarize: use LLM to generate concise condition names for the indication column
 if ! python3 "${SCRIPT_DIR}/fda_approvals.py" \
   --from "$DATE_FROM" \
   --to "$DATE_TO" \
   --cache \
+  --summarize \
   -o "$OUTPUT_FILE" 2>&1; then
   echo "[1/3] FAILED: fda_approvals.py exited with error" >&2
   send_failure_notification "fetch" "fda_approvals.py exited with non-zero status"
