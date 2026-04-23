@@ -4,13 +4,16 @@
 Usage:
     python fda_approvals.py --from 2026-01-01 --to 2026-04-22
     python fda_approvals.py --from 2026-01-01 --to 2026-04-22 --type nme
+    python fda_approvals.py --from 2026-01-01 --to 2026-04-22 --type suppl
     python fda_approvals.py --from 2026-01-01 --to 2026-04-22 --output approvals.json
 """
 
 import argparse
 import json
+import re
 import sys
 import time
+import unicodedata
 from datetime import datetime
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
@@ -19,11 +22,47 @@ from urllib.parse import quote
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
 
+EFFICACY_SUPPL_CODES = {"EFFICACY"}
+
 
 def fetch_json(url):
     req = Request(url, headers={"User-Agent": "fda-approvals-script/1.0"})
-    with urlopen(req) as resp:
+    with urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
+
+
+def slugify(name):
+    if not name:
+        return ""
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    name = name.lower().strip()
+    name = re.sub(r"[^\w\s-]", "", name)
+    name = re.sub(r"[-\s]+", "-", name)
+    return name.strip("-")
+
+
+def truncate_indication(text, max_length=100):
+    if not text:
+        return ""
+    if isinstance(text, list):
+        text = " ".join(text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"^\d+(\.\d+)*\s+INDICATIONS?\s+AND\s+USAGE\s*", "", text, flags=re.IGNORECASE)
+    text = text.strip()
+    if not text:
+        return ""
+    if text[0].isdigit() and text[1:2] == " ":
+        text = re.sub(r"^\d+\s+", "", text)
+    if len(text) <= max_length:
+        return text
+    sentence_end = re.search(r"[.!?](\s|$)", text[:max_length + 20])
+    if sentence_end and sentence_end.start() > 20:
+        return text[:sentence_end.start() + 1].strip()
+    clause_end = re.search(r"[,;:](\s)", text[50:max_length + 10])
+    if clause_end:
+        pos = 50 + clause_end.start()
+        return text[:pos].strip() + "..."
+    return text[:max_length].rsplit(" ", 1)[0].strip() + "..."
 
 
 def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100):
@@ -40,6 +79,7 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
         search_parts.append(
             f'submissions.submission_class_code_description:"{submission_type}"'
         )
+    search_parts.append(f"submissions.submission_status_date:[{date_from_str}+TO+{date_to_str}]")
 
     search = "+AND+".join(search_parts)
     url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
@@ -89,14 +129,19 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
         approval_date = orig_sub.get("submission_status_date", "")
         approval_date_fmt = f"{approval_date[:4]}-{approval_date[4:6]}-{approval_date[6:8]}" if len(approval_date) == 8 else approval_date
 
+        brand_name = brand_names[0] if brand_names else None
+        generic_name = generic_names[0] if generic_names else None
+
         drug = {
-            "brand_name": brand_names[0] if brand_names else None,
-            "generic_name": generic_names[0] if generic_names else None,
+            "brand_name": brand_name,
+            "generic_name": generic_name,
             "all_brand_names": brand_names,
             "all_generic_names": generic_names,
             "approval_date": approval_date_fmt,
             "application_number": entry.get("application_number", ""),
             "submission_class": orig_sub.get("submission_class_code_description", ""),
+            "submission_type": "ORIG",
+            "type_badge": "New Drug",
             "review_priority": orig_sub.get("review_priority", ""),
             "sponsor_name": entry.get("sponsor_name", ""),
             "manufacturer_name": openfda.get("manufacturer_name", []),
@@ -117,15 +162,117 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
             "rxcui": openfda.get("rxcui", []),
             "unii": openfda.get("unii", []),
         }
+        drug["slug"] = slugify(drug["brand_name"] or drug["generic_name"] or "")
         drugs.append(drug)
 
     return drugs
 
 
-def fetch_label(drug):
-    brand_name = drug.get("brand_name") or drug.get("all_brand_names", [""])[0]
-    app_num = drug.get("application_number", "")
+def fetch_suppl_approvals(date_from, date_to, limit=100):
+    date_from_str = date_from.strftime("%Y%m%d")
+    date_to_str = date_to.strftime("%Y%m%d")
+    date_from_int = int(date_from_str)
+    date_to_int = int(date_to_str)
 
+    date_filter = f"+AND+submissions.submission_status_date:[{date_from_str}+TO+{date_to_str}]"
+    search = f'submissions.submission_type:SUPPL+AND+submissions.submission_status:AP+AND+submissions.submission_class_code:EFFICACY{date_filter}'
+    url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
+
+    all_results = []
+    skip = 0
+    while True:
+        page_url = f"{url}&skip={skip}" if skip > 0 else url
+        data = fetch_json(page_url)
+        results = data.get("results", [])
+        all_results.extend(results)
+        if len(results) < limit or len(all_results) >= data.get("meta", {}).get("results", {}).get("total", 0):
+            break
+        skip += limit
+
+    drugs = []
+    seen_keys = set()
+
+    for entry in all_results:
+        openfda = entry.get("openfda", {})
+        brand_names = openfda.get("brand_name", [])
+        generic_names = openfda.get("generic_name", [])
+        if not brand_names and not generic_names:
+            continue
+
+        products = entry.get("products", [])
+        is_prescription = any(
+            p.get("marketing_status") == "Prescription" or p.get("marketing_status") == "1"
+            for p in products
+        )
+        if not is_prescription:
+            continue
+
+        for s in entry.get("submissions", []):
+            if s.get("submission_type") != "SUPPL":
+                continue
+            if s.get("submission_status") != "AP":
+                continue
+
+            code = s.get("submission_class_code", "")
+            if code not in EFFICACY_SUPPL_CODES:
+                continue
+
+            date_raw = s.get("submission_status_date", "")
+            if len(date_raw) == 8:
+                date_int = int(date_raw)
+                if date_int < date_from_int or date_int > date_to_int:
+                    continue
+            else:
+                continue
+
+            app_num = entry.get("application_number", "")
+            approval_date_fmt = f"{date_raw[:4]}-{date_raw[4:6]}-{date_raw[6:8]}"
+            dedup_key = (app_num, approval_date_fmt, s.get("submission_number", ""))
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+
+            brand_name = brand_names[0] if brand_names else None
+            generic_name = generic_names[0] if generic_names else None
+
+            drug = {
+                "brand_name": brand_name,
+                "generic_name": generic_name,
+                "all_brand_names": brand_names,
+                "all_generic_names": generic_names,
+                "approval_date": approval_date_fmt,
+                "application_number": app_num,
+                "submission_class": s.get("submission_class_code_description", ""),
+                "submission_type": "SUPPL",
+                "type_badge": "New Indication",
+                "review_priority": s.get("review_priority", ""),
+                "sponsor_name": entry.get("sponsor_name", ""),
+                "manufacturer_name": openfda.get("manufacturer_name", []),
+                "route": openfda.get("route", []),
+                "pharm_class_epc": openfda.get("pharm_class_epc", []),
+                "pharm_class_moa": openfda.get("pharm_class_moa", []),
+                "products": [
+                    {
+                        "brand_name": p.get("brand_name", ""),
+                        "active_ingredients": p.get("active_ingredients", []),
+                        "dosage_form": p.get("dosage_form", ""),
+                        "route": p.get("route", ""),
+                        "marketing_status": p.get("marketing_status", ""),
+                    }
+                    for p in products
+                    if p.get("marketing_status") in ("Prescription", "1")
+                ],
+                "rxcui": openfda.get("rxcui", []),
+                "unii": openfda.get("unii", []),
+            }
+            drug["slug"] = slugify(drug["brand_name"] or drug["generic_name"] or "")
+            drugs.append(drug)
+
+    return drugs
+
+
+def fetch_label(drug):
+    app_num = drug.get("application_number", "")
     search = f'search=openfda.application_number:"{app_num}"&limit=1'
 
     try:
@@ -169,7 +316,8 @@ def fetch_label(drug):
     except HTTPError as e:
         if e.code == 404:
             return None
-        print(f"  Warning: HTTP {e.code} fetching label for {brand_name}", file=sys.stderr)
+        name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
+        print(f"  Warning: HTTP {e.code} fetching label for {name}", file=sys.stderr)
         return None
 
 
@@ -186,13 +334,13 @@ def main():
         help="End date (YYYY-MM-DD)"
     )
     parser.add_argument(
-        "--type", dest="submission_type", default=None,
-        choices=["nme", "all"],
-        help="Filter: 'nme' for Type 1 New Molecular Entities only, 'all' for all original approvals (default: all)"
+        "--type", dest="submission_type", default="all",
+        choices=["nme", "all", "suppl"],
+        help="Filter: 'nme' for Type 1 NME only, 'suppl' for efficacy supplements only, 'all' for both (default: all)"
     )
     parser.add_argument(
         "--limit", type=int, default=100,
-        help="Max number of drugsfda results to fetch (default: 100)"
+        help="Max number of drugsfda results per query (default: 100)"
     )
     parser.add_argument(
         "--output", "-o", default=None,
@@ -208,11 +356,33 @@ def main():
     date_from = datetime.strptime(args.date_from, "%Y-%m-%d")
     date_to = datetime.strptime(args.date_to, "%Y-%m-%d")
 
-    type_filter = 'Type 1 - New Molecular Entity' if args.submission_type == 'nme' else None
+    drugs = []
 
-    print(f"Fetching drugsfda approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
-    drugs = fetch_drugsfda_approvals(date_from, date_to, submission_type=type_filter, limit=args.limit)
-    print(f"Found {len(drugs)} prescription drug approvals.", file=sys.stderr)
+    if args.submission_type == "nme":
+        print(f"Fetching NME approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
+        drugs = fetch_drugsfda_approvals(date_from, date_to, submission_type="Type 1 - New Molecular Entity", limit=args.limit)
+        print(f"Found {len(drugs)} NME prescription drug approvals.", file=sys.stderr)
+    elif args.submission_type == "suppl":
+        print(f"Fetching efficacy SUPPL approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
+        drugs = fetch_suppl_approvals(date_from, date_to, limit=args.limit)
+        print(f"Found {len(drugs)} efficacy supplement approvals.", file=sys.stderr)
+    else:
+        print(f"Fetching ORIG + efficacy SUPPL approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
+        orig_drugs = fetch_drugsfda_approvals(date_from, date_to, limit=args.limit)
+        suppl_drugs = fetch_suppl_approvals(date_from, date_to, limit=args.limit)
+        print(f"Found {len(orig_drugs)} ORIG and {len(suppl_drugs)} SUPPL approvals.", file=sys.stderr)
+        drugs = orig_drugs + suppl_drugs
+        drugs.sort(key=lambda d: d.get("approval_date", ""), reverse=True)
+
+        seen = set()
+        deduped = []
+        for d in drugs:
+            key = (d["application_number"], d["approval_date"], d["type_badge"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(d)
+        drugs = deduped
+        print(f"After deduplication: {len(drugs)} unique approval events.", file=sys.stderr)
 
     if not args.skip_labels:
         print("Fetching labels...", file=sys.stderr)
@@ -221,12 +391,22 @@ def main():
             print(f"  [{i}/{len(drugs)}] {name}...", file=sys.stderr)
             label = fetch_label(drug)
             drug["label"] = label
+            if label:
+                drug["indication_preview"] = truncate_indication(
+                    label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", "")
+                )
+            else:
+                drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+    else:
+        for drug in drugs:
+            drug["label"] = None
+            drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
 
     output = {
         "query": {
             "date_from": args.date_from,
             "date_to": args.date_to,
-            "submission_type_filter": args.submission_type or "all",
+            "submission_type_filter": args.submission_type,
         },
         "count": len(drugs),
         "drugs": drugs,

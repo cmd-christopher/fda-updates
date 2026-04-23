@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-22)
 
 **Core value:** Physicians can quickly see what new drugs and new indications have been approved and access the complete prescribing information they need to make prescribing decisions.
-**Current focus:** Phase 3: Drug Detail Pages
+**Current focus:** Phase 4: Automation & Deployment
 
 ## Current Position
 
-Phase: 3 of 4 (Drug Detail Pages)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-04-23 — Phase 3 complete (detail pages with PI sections, boxed warning, collapsible sections)
+Phase: 4 of 4 (Automation & Deployment)
+Plan: 0 of 2 in current phase
+Status: Ready to execute
+Last activity: 2026-04-23 — Phase 4 planned (automation & deployment)
 
-Progress: [██████░░░░] 75%
+Progress: [███████░░░] 75%
 
 ## Performance Metrics
 
@@ -74,4 +74,4 @@ Items acknowledged and carried forward from previous milestone close:
 
 Last session: 2026-04-23
 Stopped at: Phase 3 complete — all detail pages generated and verified
-Resume file: .planning/phases/03-drug-detail/
+Resume file: .planning/phases/04-automation-deployment/
