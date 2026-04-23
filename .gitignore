@@ -28,6 +28,10 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Site (deployed to local Synology, not tracked in this repo)
+site/
+
 # Output files
 *.json
 !package.json
+!.planning/*.json
