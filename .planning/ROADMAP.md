@@ -58,7 +58,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Boxed warning appears prominently at the top in a distinct callout style (never hidden in a collapsed section by default)
   4. Long PI sections are collapsible/expandable for scanability
   5. Navigation back to the index page is always available, and key metadata (approval date, type badge, manufacturer, route, dosage form) is visible on the detail page
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+- [ ] 03-01-PLAN.md — Build pipeline: HTML sanitizer, slug collision check, detail page generation
+- [ ] 03-02-PLAN.md — Detail template: full PI sections, boxed warning callout, collapsible sections, metadata bar, CSS
+
 **UI hint**: yes
 
 ### Phase 4: Automation & Deployment
@@ -80,5 +83,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
 | 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
-| 3. Drug Detail Pages | 0/? | Not started | - |
+| 3. Drug Detail Pages | 0/2 | Planned | - |
 | 4. Automation & Deployment | 0/? | Not started | - |
