@@ -405,9 +405,16 @@ def main():
         print(f"Found {len(drugs)} efficacy supplement approvals.", file=sys.stderr)
     else:
         print(f"Fetching ORIG + efficacy SUPPL approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
-        orig_drugs = fetch_drugsfda_approvals(date_from, date_to, limit=args.limit)
+        orig_types = [
+            "Type 1 - New Molecular Entity",
+            "Type 2 - New Active Ingredient",
+            "Type 4 - New Combination",
+        ]
+        orig_drugs = []
+        for st in orig_types:
+            orig_drugs.extend(fetch_drugsfda_approvals(date_from, date_to, submission_type=st, limit=args.limit))
         suppl_drugs = fetch_suppl_approvals(date_from, date_to, limit=args.limit)
-        print(f"Found {len(orig_drugs)} ORIG and {len(suppl_drugs)} SUPPL approvals.", file=sys.stderr)
+        print(f"Found {len(orig_drugs)} ORIG (NME+Type2+Type4) and {len(suppl_drugs)} SUPPL approvals.", file=sys.stderr)
         drugs = orig_drugs + suppl_drugs
         drugs.sort(key=lambda d: d.get("approval_date", ""), reverse=True)
 
