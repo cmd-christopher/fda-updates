@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-22)
 ## Current Position
 
 Phase: 3 of 4 (Drug Detail Pages)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-04-23 — Plan 01 complete (sanitizer, slug collision, detail page generation)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-04-23 — Phase 3 complete (detail pages with PI sections, boxed warning, collapsible sections)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 75%
 
 ## Performance Metrics
 
@@ -29,6 +29,7 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 1. Data Pipeline | 2 | ~2h | ~1h |
 | 2. Site Shell & Index | 2 | ~20min | ~10min |
+| 3. Drug Detail Pages | 2 | ~27min | ~14min |
 
 **Recent Trend:**
 - Last 5 plans: Phase 1 Plans 01-02, Phase 2 Plans 01-02 (all complete)
@@ -49,6 +50,7 @@ Recent decisions affecting current work:
 - [Phase 2]: Card layout on mobile for drug table (not horizontal scroll)
 - [Phase 2]: System auto-detect + manual toggle for dark mode (localStorage)
 - [Phase 3-01]: Regex-based HTML sanitizer (no external deps), slug collision detection via app number digits
+- [Phase 3-02]: Native <details> for collapsible sections, root_path for subdirectory asset paths
 
 ### Pending Todos
 
@@ -58,6 +60,7 @@ None yet.
 
 - ~~Phase 1 needs SUPPL efficacy classification values verified against real openFDA data~~ — RESOLVED: only EFFICACY code
 - ~~Phase 3 needs label HTML sanitization strategy tested against real FDA label data~~ — RESOLVED: regex-based sanitizer implemented and passing all tests
+- ~~Phase 3 detail pages need correct asset paths from drugs/ subdirectory~~ — RESOLVED: root_path variable in base.html
 
 ## Deferred Items
 
@@ -70,5 +73,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-23
-Stopped at: Phase 3 Plan 01 complete, Plan 02 next
+Stopped at: Phase 3 complete — all detail pages generated and verified
 Resume file: .planning/phases/03-drug-detail/

@@ -28,12 +28,12 @@
 
 ### Detail Pages
 
-- [ ] **DETAIL-01**: Each drug has a dedicated detail page showing full prescribing information
-- [ ] **DETAIL-02**: Detail page includes sections: Indications & Usage, Boxed Warning, Dosage & Administration, Dosage Forms & Strengths, Contraindications, Warnings & Precautions, Adverse Reactions, Drug Interactions, Use in Specific Populations, Mechanism of Action, and any other available label sections
-- [ ] **DETAIL-03**: Boxed warning is visually prominent with a distinct callout style
-- [ ] **DETAIL-04**: Long sections are presented in collapsible/expandable format for scanability
-- [ ] **DETAIL-05**: Navigation back to the main index page is always available
-- [ ] **DETAIL-06**: Detail page shows approval date, type badge (New Drug / New Indication), and key metadata (manufacturer, route, dosage form)
+- [x] **DETAIL-01**: Each drug has a dedicated detail page showing full prescribing information
+- [x] **DETAIL-02**: Detail page includes sections: Indications & Usage, Boxed Warning, Dosage & Administration, Dosage Forms & Strengths, Contraindications, Warnings & Precautions, Adverse Reactions, Drug Interactions, Use in Specific Populations, Mechanism of Action, and any other available label sections
+- [x] **DETAIL-03**: Boxed warning is visually prominent with a distinct callout style
+- [x] **DETAIL-04**: Long sections are presented in collapsible/expandable format for scanability
+- [x] **DETAIL-05**: Navigation back to the main index page is always available
+- [x] **DETAIL-06**: Detail page shows approval date, type badge (New Drug / New Indication), and key metadata (manufacturer, route, dosage form)
 
 ### Site Shell
 
@@ -105,10 +105,10 @@
 | AUTO-05 | Phase 2 | Pending |
 | DETAIL-01 | Phase 3 | Complete |
 | DETAIL-02 | Phase 3 | Complete |
-| DETAIL-03 | Phase 3 | Pending |
-| DETAIL-04 | Phase 3 | Pending |
-| DETAIL-05 | Phase 3 | Pending |
-| DETAIL-06 | Phase 3 | Pending |
+| DETAIL-03 | Phase 3 | Complete |
+| DETAIL-04 | Phase 3 | Complete |
+| DETAIL-05 | Phase 3 | Complete |
+| DETAIL-06 | Phase 3 | Complete |
 | AUTO-01 | Phase 4 | Pending |
 | AUTO-02 | Phase 4 | Pending |
 | AUTO-04 | Phase 4 | Pending |
@@ -120,4 +120,4 @@
 
 ---
 *Requirements defined: 2026-04-22*
-*Last updated: 2026-04-22 after initial definition*
+*Last updated: 2026-04-23 after Phase 3 execution*

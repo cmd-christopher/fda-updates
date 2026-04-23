@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Data Pipeline** - Extend fda_approvals.py to fetch both NME and SUPPL approvals and produce a stable JSON data contract
 - [x] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
-- [ ] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
+- [x] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
 - [ ] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
 
 ## Phase Details
@@ -60,7 +60,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Navigation back to the index page is always available, and key metadata (approval date, type badge, manufacturer, route, dosage form) is visible on the detail page
 **Plans**: 2 plans in 2 waves
 - [x] 03-01-PLAN.md — Build pipeline: HTML sanitizer, slug collision check, detail page generation
-- [ ] 03-02-PLAN.md — Detail template: full PI sections, boxed warning callout, collapsible sections, metadata bar, CSS
+- [x] 03-02-PLAN.md — Detail template: full PI sections, boxed warning callout, collapsible sections, metadata bar, CSS
 
 **UI hint**: yes
 
@@ -83,5 +83,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline | 2/2 | Complete | 2026-04-23 |
 | 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
-| 3. Drug Detail Pages | 1/2 | In Progress | - |
+| 3. Drug Detail Pages | 2/2 | Complete | 2026-04-23 |
 | 4. Automation & Deployment | 0/? | Not started | - |
