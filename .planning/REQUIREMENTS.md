@@ -90,28 +90,28 @@
 | DATA-07 | Phase 1 | Pending |
 | DATA-08 | Phase 1 | Pending |
 | DATA-09 | Phase 1 | Pending |
+| AUTO-03 | Phase 1 | Pending |
 | INDEX-01 | Phase 2 | Pending |
 | INDEX-02 | Phase 2 | Pending |
 | INDEX-03 | Phase 2 | Pending |
 | INDEX-04 | Phase 2 | Pending |
 | INDEX-05 | Phase 2 | Pending |
 | INDEX-06 | Phase 2 | Pending |
+| SITE-01 | Phase 2 | Pending |
+| SITE-02 | Phase 2 | Pending |
+| SITE-03 | Phase 2 | Pending |
+| SITE-04 | Phase 2 | Pending |
+| SITE-05 | Phase 2 | Pending |
+| AUTO-05 | Phase 2 | Pending |
 | DETAIL-01 | Phase 3 | Pending |
 | DETAIL-02 | Phase 3 | Pending |
 | DETAIL-03 | Phase 3 | Pending |
 | DETAIL-04 | Phase 3 | Pending |
 | DETAIL-05 | Phase 3 | Pending |
 | DETAIL-06 | Phase 3 | Pending |
-| SITE-01 | Phase 2 | Pending |
-| SITE-02 | Phase 2 | Pending |
-| SITE-03 | Phase 2 | Pending |
-| SITE-04 | Phase 2 | Pending |
-| SITE-05 | Phase 2 | Pending |
 | AUTO-01 | Phase 4 | Pending |
 | AUTO-02 | Phase 4 | Pending |
-| AUTO-03 | Phase 1 | Pending |
 | AUTO-04 | Phase 4 | Pending |
-| AUTO-05 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
