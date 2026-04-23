@@ -22,8 +22,8 @@
     </thead>
     <tbody class="list">
     {% for drug in drugs %}
-        <tr>
-            <td class="date" data-label="Date" data-timestamp="{{ drug.approval_date }}">{{ drug.approval_date | format_date }}</td>
+        <tr data-timestamp="{{ drug.approval_date }}">
+            <td class="date" data-label="Date">{{ drug.approval_date | format_date }}</td>
             <td data-label="Type">
             {% if drug.type_badge == "New Drug" %}
                 <span class="badge badge-new-drug type">{{ drug.type_badge }}</span>
@@ -32,9 +32,9 @@
             {% endif %}
             </td>
             <td class="name" data-label="Brand Name"><a href="drugs/{{ drug.slug }}.html">{{ drug.brand_name or drug.generic_name or "Unknown" }}</a></td>
-            <td class="generic" data-label="Generic Name">{{ drug.generic_name or "&mdash;" }}</td>
-            <td class="category" data-label="Category">{{ drug.pharm_class_epc[0].split(' [EPC]')[0] if drug.pharm_class_epc else "&mdash;" }}</td>
-            <td data-label="Indication">{{ drug.indication_preview or "&mdash;" }}</td>
+            <td class="generic" data-label="Generic Name">{{ drug.generic_name or "—" }}</td>
+            <td class="category" data-label="Category">{{ drug.pharm_class_epc[0].split(' [EPC]')[0] if drug.pharm_class_epc else "—" }}</td>
+            <td data-label="Indication">{{ drug.indication_preview or "—" }}</td>
         </tr>
     {% endfor %}
     </tbody>
