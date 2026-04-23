@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-22)
 
 **Core value:** Physicians can quickly see what new drugs and new indications have been approved and access the complete prescribing information they need to make prescribing decisions.
-**Current focus:** Phase 2: Site Shell & Index Page
+**Current focus:** Phase 3: Drug Detail Pages
 
 ## Current Position
 
-Phase: 2 of 4 (Site Shell & Index Page)
-Plan: 2 of 2 in current phase
-Status: Complete
-Last activity: 2026-04-23 — Phase 2 executed (2 plans complete)
+Phase: 3 of 4 (Drug Detail Pages)
+Plan: 0 of 2 in current phase
+Status: Ready to execute
+Last activity: 2026-04-23 — Phase 3 planned (2 plans in 2 waves)
 
 Progress: [█████░░░░░] 50%
 
@@ -69,5 +69,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-23
-Stopped at: Phase 2 complete, ready for Phase 3 planning
+Stopped at: Phase 3 planned, ready for execution
 Resume file: .planning/phases/03-drug-detail/
