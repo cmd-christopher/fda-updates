@@ -100,7 +100,7 @@ fi
 
 # Per D-10: Commit message with date and drug count delta
 # Count drugs in new data for commit message
-NEW_COUNT="$(python3 -c "import json; print(json.load(open('${OUTPUT_FILE}'))['count'])" 2>/dev/null || echo "unknown")"
+NEW_COUNT="$(python3 -c "import sys, json; print(json.load(open(sys.argv[1]))['count'])" "$OUTPUT_FILE" 2>/dev/null || echo "unknown")"
 
 # Try to get previous count from the last commit message for delta
 PREV_COUNT=""
