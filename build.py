@@ -44,24 +44,40 @@ def _split_long_paragraphs(text, max_chars=2500):
         return text
     # Try sentence boundaries first
     sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
-    if max(len(s) for s in sentences) <= max_chars:
-        chunks = []
-        current = []
-        current_len = 0
-        for sentence in sentences:
-            if current and current_len + len(sentence) > max_chars:
-                chunks.append("<p>" + " ".join(current) + "</p>")
-                current = []
-                current_len = 0
-            current.append(sentence)
-            current_len += len(sentence) + 1
+    chunks = []
+    current = []
+    current_len = 0
+
+    # Do both checks and building the chunks in a single pass
+    for sentence in sentences:
+        s_len = len(sentence)
+        if s_len > max_chars:
+            chunks = None
+            break
+
+        if current and current_len + s_len > max_chars:
+            chunks.append("<p>" + " ".join(current) + "</p>")
+            current.clear()
+            current_len = 0
+
+        current.append(sentence)
+        current_len += s_len + 1
+
+    if chunks is not None:
         if current:
             chunks.append("<p>" + " ".join(current) + "</p>")
         return "\n".join(chunks)
+
     # Fallback: split at category boundaries like "System Disorders: "
     parts = re.split(r"(?<=:)\s+(?=[A-Z])", text)
-    if len(parts) > 1 and max(len(p) for p in parts) <= max_chars:
-        return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
+    if len(parts) > 1:
+        # Check max part length directly
+        for p in parts:
+            if len(p) > max_chars:
+                parts = None
+                break
+        if parts is not None:
+            return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
     # Last resort: force split at max_chars boundaries
     chunks = []
     while text:
