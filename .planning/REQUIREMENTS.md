@@ -53,6 +53,14 @@
 
 ## v2 Requirements
 
+### Detail Page Formatting
+
+- [ ] **FMT-01**: FDA PDF artifact pattern "N.N X N.N FullTitle" (e.g., "1.1 P 1.1 Plaque Psoriasis") is preprocessed to strip the single-letter remnant so real sub-section headings render as `<h4>` elements
+- [ ] **FMT-02**: Indication lead-in paragraphs using patterns like "indicated for the treatment of: ... (1.1) ... (1.2) ..." render as `<ul>` bullet lists with each indication as a separate `<li>` item
+- [ ] **FMT-03**: No `<p>` block in section-content exceeds 3,000 characters — long paragraphs split at sentence boundaries or sub-section heading patterns
+- [ ] **FMT-04**: Sub-section headings (`<h4 class="pi-subsection">`) are visually distinct from body text with adequate size (≥1.05rem), left accent or border, and spacing that creates clear visual hierarchy
+- [ ] **FMT-05**: Build output directory is cleaned before regeneration to prevent stale files from accumulating
+
 ### Search & Filter
 
 - **SRCH-01**: Main page has a search/filter bar for drug name or category

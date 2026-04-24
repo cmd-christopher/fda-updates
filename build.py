@@ -38,6 +38,279 @@ def sanitize_html(text):
     return Markup(text)
 
 
+def _split_long_paragraphs(text, max_chars=2500):
+    """Split text into multiple <p> blocks if it exceeds max_chars."""
+    if len(text) <= max_chars:
+        return text
+    # Try sentence boundaries first
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
+    if max(len(s) for s in sentences) <= max_chars:
+        chunks = []
+        current = []
+        current_len = 0
+        for sentence in sentences:
+            if current and current_len + len(sentence) > max_chars:
+                chunks.append("<p>" + " ".join(current) + "</p>")
+                current = []
+                current_len = 0
+            current.append(sentence)
+            current_len += len(sentence) + 1
+        if current:
+            chunks.append("<p>" + " ".join(current) + "</p>")
+        return "\n".join(chunks)
+    # Fallback: split at category boundaries like "System Disorders: "
+    parts = re.split(r"(?<=:)\s+(?=[A-Z])", text)
+    if len(parts) > 1 and max(len(p) for p in parts) <= max_chars:
+        return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
+    # Last resort: force split at max_chars boundaries
+    chunks = []
+    while text:
+        if len(text) <= max_chars:
+            chunks.append(f"<p>{text}</p>")
+            break
+        split_at = text.rfind(" ", max_chars - 200, max_chars)
+        if split_at == -1:
+            split_at = max_chars
+        chunks.append(f"<p>{text[:split_at]}</p>")
+        text = text[split_at:].lstrip()
+    return "\n".join(chunks)
+
+
+_SENTENCE_STARTERS = frozenset({
+    "The", "This", "These", "It", "Its",
+    "Because", "When", "If", "Due", "Based",
+    "Patients", "Patient", "Adults", "Adult", "Children",
+    "Assess", "Monitor", "Evaluate", "Determine", "Measure",
+    "Coadministration", "Concomitant", "Discontinue",
+})
+
+_CONNECTORS = frozenset({"of", "and", "in", "for", "with"})
+
+
+def _parse_heading_title(words, max_plain=6, max_chars=55):
+    """Parse sub-section heading title from word list after the section number."""
+    title_parts = []
+    i = 0
+
+    while i < len(words):
+        clean = words[i].strip(".,;:")
+        is_title_word = bool(
+            re.match(r"^[A-Z][a-z]+$", clean)
+            or re.match(r"^[A-Z][A-Z0-9]+[a-z]*$", clean)
+            or re.match(r"^[A-Z][a-z]+-[A-Z][a-z]+$", clean)
+        )
+
+        if is_title_word:
+            if i + 1 < len(words):
+                next_w = words[i + 1].strip(".,;:")
+                if re.match(r"^[a-z]+$", next_w) and next_w not in _CONNECTORS:
+                    if title_parts:
+                        break
+
+            test_plain = sum(
+                1 for w in title_parts + [clean]
+                if w[0].isupper() and w.lower() not in _CONNECTORS
+            )
+            test_title = " ".join(title_parts + [clean])
+            if test_plain > max_plain or len(test_title) > max_chars:
+                break
+
+            title_parts.append(clean)
+
+            if i + 1 < len(words):
+                next_clean = words[i + 1].strip(".,;:")
+                is_next_connector = (
+                    next_clean.lower() in _CONNECTORS
+                    and not bool(re.match(r"^[A-Z][a-z]+$", next_clean))
+                )
+                if is_next_connector:
+                    title_parts.append(next_clean)
+                    i += 2
+                    continue
+
+            if i + 1 < len(words):
+                nw = words[i + 1].strip(".,;:")
+                if re.match(r"^[A-Z]{2,}$", nw):
+                    break
+                if re.match(r"^[a-z]", nw):
+                    break
+                if nw in _SENTENCE_STARTERS:
+                    break
+            i += 1
+        else:
+            break
+
+    while title_parts and title_parts[-1].lower() in _CONNECTORS:
+        title_parts.pop()
+
+    return " ".join(title_parts) if title_parts else None
+
+
+def format_pi_text(text):
+    """Format FDA prescribing information text for readability.
+
+    Three-stage pipeline:
+    1. Pre-process: strip section header, detect indication lead-in lists,
+       remove cross-refs that duplicate sub-section structure
+    2. Split: separate text at sub-section headings (N.N Title)
+    3. Post-process: style cross-refs, detect bullet lists, split long paragraphs
+    """
+    if not text:
+        return Markup("")
+
+    text = str(text)
+
+    # --- Protect existing HTML tables and lists ---
+    tables = []
+    def _save_table(m):
+        tables.append(m.group(0))
+        return f"%%TABLE{len(tables) - 1}%%"
+    text = re.sub(r"<table[^>]*>.*?</table>", _save_table, text, flags=re.DOTALL | re.IGNORECASE)
+
+    lists_html = []
+    def _save_list(m):
+        lists_html.append(m.group(0))
+        return f"%%LIST{len(lists_html) - 1}%%"
+    text = re.sub(r"<(?:ul|ol)[^>]*>.*?</(?:ul|ol)>", _save_list, text, flags=re.DOTALL | re.IGNORECASE)
+
+    # --- Stage 1: Pre-process ---
+
+    text = text.strip()
+
+    # Strip the top-level section header like "2 DOSAGE AND ADMINISTRATION"
+    text = re.sub(r"^\d+\s+[A-Z][A-Z\s&]+\s*", "", text)
+
+    # Detect indication lead-in pattern and convert to bullet list
+    # Pattern: "DRUG is indicated/recommended for [the treatment of]: item1. (1.1) item2. (1.2) ..."
+    lead_in_re = re.compile(
+        r"^([\s\S]{0,300}?(?:indicated|recommended)\s*(?:for|as)?\s*(?:the\s+)?"
+        r"(?:treatment|management|therapy|use|adjunct|adjuvant|first-line|monotherapy|combination)?[\s\S]{0,100}?[:.])\s*"
+        r"([\s\S]*)",
+        re.DOTALL | re.IGNORECASE,
+    )
+    indication_list_html = None
+    lead_sentence = None
+    m = lead_in_re.match(text)
+    if m and "( " in m.group(2) and re.search(r"\(\s*\d+\.\d+\s*\)", m.group(2)):
+        lead_sentence = m.group(1).strip().rstrip(":")
+        remainder = m.group(2)
+        # Split at cross-reference boundaries: text before ( N.N ) becomes list items
+        items = re.split(r"\s*\(\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*\s*\)\s*", remainder)
+        items = [item.strip() for item in items if item.strip()]
+        if len(items) >= 2:
+            li_parts = [f"<li>{item}</li>" for item in items]
+            indication_list_html = '<p class="indication-lead">' + lead_sentence + ':</p>\n<ul class="pi-list">' + "".join(li_parts) + "</ul>"
+            # Remove the lead-in portion from text so it's not double-rendered
+            # Find where the sub-section headings start
+            subsec_match = re.search(r"(?:^|\s)\d+\.\d+\s+[A-Z][a-z]", remainder)
+            if subsec_match:
+                text = remainder[subsec_match.start():].lstrip()
+            else:
+                text = remainder
+                # Check if remainder still has sub-section headings
+                if not re.search(r"\d+\.\d+\s+[A-Z][a-z]", text):
+                    # No sub-sections left — just the indication list
+                    indication_list_html = _style_xrefs_in_body(indication_list_html)
+                    return Markup(indication_list_html)
+
+    # --- Stage 2: Split at sub-section headings ---
+
+    sections = []
+    last_end = 0
+    for m in re.finditer(r"(?:^|\.\s)(\d+(?:\.\d+)+)\s+([A-Z])", text):
+        num = m.group(1)
+        match_start = m.start()
+        title_start = m.end() - len(m.group(2))
+        after_num = text[title_start:]
+        title_words = after_num.split()
+        title = _parse_heading_title(title_words)
+
+        if title and len(title) > 2:
+            body_before = text[last_end:match_start].strip()
+            if body_before:
+                sections.append(("body", body_before))
+            sections.append(("heading", num, title))
+            title_end_in_after = after_num.lower().find(title.lower()) + len(title)
+            last_end = title_start + title_end_in_after
+
+    remaining = text[last_end:].strip()
+    if remaining:
+        sections.append(("body", remaining))
+
+    if not sections:
+        sections.append(("body", text.strip()))
+
+    # --- Stage 3: Post-process and convert to HTML ---
+
+    result_parts = []
+    if indication_list_html:
+        result_parts.append(indication_list_html)
+
+    for section in sections:
+        if section[0] == "heading":
+            _, num, title = section
+            result_parts.append(f'<h4 class="pi-subsection"><span class="sub-num">{num}</span> {title}</h4>')
+        else:
+            _, body = section
+            body = body.strip()
+            if not body:
+                continue
+
+            # Reinsert protected tables/lists
+            body = re.sub(r"%%TABLE(\d+)%%", lambda m: tables[int(m.group(1))], body)
+            body = re.sub(r"%%LIST(\d+)%%", lambda m: lists_html[int(m.group(1))], body)
+
+            # Style cross-references
+            body = _style_xrefs_in_body(body)
+
+            # Detect simple bullet lists (• or dash-prefixed lines)
+            lines = body.split("\n")
+            has_bullets = sum(1 for l in lines if re.match(r"^\s*[•\-\*]\s+", l))
+            if has_bullets >= 2:
+                formatted_lines = []
+                in_list = False
+                for l in lines:
+                    if re.match(r"^\s*[•\-\*]\s+", l):
+                        if not in_list:
+                            formatted_lines.append('<ul class="pi-list">')
+                            in_list = True
+                        item = re.sub(r"^\s*[•\-\*]\s+", "", l)
+                        formatted_lines.append(f"<li>{item}</li>")
+                    else:
+                        if in_list:
+                            formatted_lines.append("</ul>")
+                            in_list = False
+                        formatted_lines.append(l)
+                if in_list:
+                    formatted_lines.append("</ul>")
+                body = "\n".join(formatted_lines)
+
+            # Wrap in <p> or split long text
+            if not re.match(r"^\s*<(?:h[1-6]|div|ul|ol|table|p|blockquote)", body, re.IGNORECASE):
+                body = _split_long_paragraphs(body)
+
+            result_parts.append(body)
+
+    result = "\n".join(result_parts)
+    return Markup(result)
+
+
+def _style_xrefs_in_body(text):
+    """Style cross-references in body text."""
+    text = re.sub(
+        r"(\[see\s+[^]]*?)\(\s*(\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*)\s*\)([^]]*?\])",
+        r'\1<span class="xref">\2</span>\3',
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\(\s*(\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*)\s*\)",
+        r'<span class="xref">(\1)</span>',
+        text,
+    )
+    return text
+
+
 DATA_PATH = "data/approvals.json"
 TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "site"
@@ -87,15 +360,19 @@ def main():
                 print(f"Error: Missing required field '{field}' in {name}", file=sys.stderr)
                 sys.exit(1)
 
-    # Resolve slug collisions — append digits from application_number
+    # Resolve slug collisions — append app number digits, then date suffix
     slug_counts = {}
     for drug in drugs:
-        slug = drug["slug"]
+        base_slug = drug["slug"]
+        slug = base_slug
         if slug in slug_counts:
-            # Extract numeric digits from application_number (e.g., "NDA123456" → "123456")
             digits = re.sub(r"\D", "", drug.get("application_number", ""))
-            drug["slug"] = f"{slug}-{digits}" if digits else f"{slug}-{slug_counts[slug]}"
-        slug_counts[drug["slug"]] = slug_counts.get(drug["slug"], 0) + 1
+            slug = f"{base_slug}-{digits}" if digits else f"{base_slug}-{slug_counts[base_slug]}"
+        if slug in slug_counts:
+            date_suffix = drug.get("approval_date", "").replace("-", "")
+            slug = f"{slug}-{date_suffix}" if date_suffix else f"{slug}-{slug_counts[slug]}"
+        drug["slug"] = slug
+        slug_counts[slug] = slug_counts.get(slug, 0) + 1
 
     # Compute last_updated from data metadata (AUTO-05)
     query_meta = data.get("query", {})
@@ -119,6 +396,7 @@ def main():
     )
     env.filters["format_date"] = format_date
     env.filters["sanitize_html"] = sanitize_html
+    env.filters["format_pi_text"] = format_pi_text
 
     template = env.get_template("index.html")
     html = template.render(
@@ -135,6 +413,10 @@ def main():
 
     # Generate detail pages for each drug
     drugs_dir = os.path.join(OUTPUT_DIR, "drugs")
+    if os.path.isdir(drugs_dir):
+        for f in os.listdir(drugs_dir):
+            if f.endswith(".html"):
+                os.remove(os.path.join(drugs_dir, f))
     os.makedirs(drugs_dir, exist_ok=True)
 
     detail_template = env.get_template("drug_detail.html")

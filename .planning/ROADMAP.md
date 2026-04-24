@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Site Shell & Index Page** - Build the shared layout and sortable approval table that physicians land on
 - [x] **Phase 3: Drug Detail Pages** - Add full prescribing information pages for each drug with prominent boxed warnings and collapsible sections
 - [x] **Phase 4: Automation & Deployment** - Set up weekly systemd timer and automated git push deployment to Synology NAS
+- [x] **Phase 5: Detail Page Readability** - Fix FDA text formatting to render sub-section headings, bullet lists, and readable paragraphs instead of walls of run-on text
 
 ## Phase Details
 
@@ -76,6 +77,20 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 04-01-PLAN.md — Incremental label fetching: add --cache flag and set_id to fda_approvals.py, create label cache
 - [x] 04-02-PLAN.md — Pipeline automation: run_fda_pipeline.sh wrapper, systemd service + timer, Pushover failure notification
 
+### Phase 5: Detail Page Readability
+**Goal**: Physicians can actually read and scan prescribing information on detail pages — sub-sections render as headings, indication lists render as bullets, and long paragraphs are broken into scannable blocks
+**Depends on**: Phase 3
+**Requirements**: FMT-01, FMT-02, FMT-03, FMT-04, FMT-05
+**Success Criteria** (what must be TRUE):
+  1. FDA PDF artifact pattern "N.N X N.N FullTitle" is stripped so real sub-section headings (e.g., "1.1 Plaque Psoriasis") render as `<h4>` elements
+  2. Indication lead-in paragraphs ("indicated for the treatment of: ... (1.1) ... (1.2) ...") render as `<ul>` bullet lists with each indication as a separate `<li>`
+  3. No `<p>` block exceeds 3,000 characters — long paragraphs are split at sentence boundaries or sub-section patterns
+  4. Sub-section headings are visually distinct from body text (larger font, left accent, adequate spacing)
+  5. Cross-references like "(5.1)" remain styled as muted inline markers but are not the only visual break in long sections
+**Plans**: 2 plans in 2 waves
+- [x] 05-01-PLAN.md — Rewrite format_pi_text: fix PDF artifact stripping, indication list parsing, paragraph splitting
+- [x] 05-02-PLAN.md — CSS refinements: subsection heading visibility, spacing tuning, type scale adjustments
+
 ## Progress
 
 **Execution Order:**
@@ -87,3 +102,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Site Shell & Index Page | 2/2 | Complete | 2026-04-23 |
 | 3. Drug Detail Pages | 2/2 | Complete | 2026-04-23 |
 | 4. Automation & Deployment | 2/2 | Complete | 2026-04-23 |
+| 5. Detail Page Readability | 2/2 | Complete | 2026-04-23 |
