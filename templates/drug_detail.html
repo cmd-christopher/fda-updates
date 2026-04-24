@@ -47,24 +47,24 @@
     <h3>&#9888; Boxed Warning</h3>
     <div class="warning-content">
       {% for paragraph in drug.label.boxed_warning %}
-        {{ paragraph | sanitize_html }}
+        {{ paragraph | sanitize_html | format_pi_text }}
       {% endfor %}
     </div>
   </div>
   {% endif %}
 
   {% set sections = [
-    ("indications_and_usage", "Indications &amp; Usage", 1, True),
-    ("dosage_and_administration", "Dosage &amp; Administration", 2, True),
-    ("dosage_forms_and_strengths", "Dosage Forms &amp; Strengths", 3, True),
-    ("contraindications", "Contraindications", 4, True),
-    ("warnings_and_cautions", "Warnings &amp; Precautions", 5, True),
+    ("indications_and_usage", "Indications & Usage", 1, True),
+    ("dosage_and_administration", "Dosage & Administration", 2, False),
+    ("dosage_forms_and_strengths", "Dosage Forms & Strengths", 3, False),
+    ("contraindications", "Contraindications", 4, False),
+    ("warnings_and_cautions", "Warnings & Precautions", 5, False),
     ("adverse_reactions", "Adverse Reactions", 6, False),
     ("drug_interactions", "Drug Interactions", 7, False),
     ("use_in_specific_populations", "Use in Specific Populations", 8, False),
-    ("overdosage", "Overdosage", 10, True),
-    ("description", "Description", 11, True),
-    ("mechanism_of_action", "Mechanism of Action", 12, True),
+    ("overdosage", "Overdosage", 10, False),
+    ("description", "Description", 11, False),
+    ("mechanism_of_action", "Mechanism of Action", 12, False),
     ("clinical_pharmacology", "Clinical Pharmacology", 12, False),
     ("clinical_studies", "Clinical Studies", 14, False),
     ("nonclinical_toxicology", "Nonclinical Toxicology", 13, False),
@@ -76,7 +76,7 @@
     <summary><span class="section-number">{{ section_num }}.</span> {{ section_title }}</summary>
     <div class="section-content">
       {% for paragraph in drug.label[section_key] %}
-        {{ paragraph | sanitize_html }}
+        {{ paragraph | sanitize_html | format_pi_text }}
       {% endfor %}
     </div>
   </details>

@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-22)
 
 **Core value:** Physicians can quickly see what new drugs and new indications have been approved and access the complete prescribing information they need to make prescribing decisions.
-**Current focus:** Phase 4: Automation & Deployment
+**Current focus:** Phase 5: Detail Page Readability
 
 ## Current Position
 
-Phase: 4 of 4 (Automation & Deployment)
-Plan: 2 of 2 complete
-Status: Phase Complete
-Last activity: 2026-04-23 — Plan 04-02 complete (pipeline automation with systemd timer)
+Phase: 5 of 5 (Detail Page Readability)
+Plan: 0 of 2 complete
+Status: Planned
+Last activity: 2026-04-23 — Completed quick task 260423-604: Indications section expanded by default on detail pages
 
 Progress: [█████████] 100%
 
@@ -53,6 +53,12 @@ Recent decisions affecting current work:
 - [Phase 3-01]: Regex-based HTML sanitizer (no external deps), slug collision detection via app number digits
 - [Phase 3-02]: Native <details> for collapsible sections, root_path for subdirectory asset paths
 - [Phase 4-02]: Weekly pipeline automation with systemd timer, Pushover failure notifications, no-change detection
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260423-604 | Indications section expanded by default on detail pages | 2026-04-23 | pending | [260423-604-indications-expanded-default](./quick/260423-604-indications-expanded-default/) |
 
 ### Pending Todos
 
