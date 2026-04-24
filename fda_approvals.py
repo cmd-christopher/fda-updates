@@ -185,6 +185,12 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
 
     Batches drugs to minimize API calls. Uses cached summaries for previously processed drugs.
     """
+    drugs_by_app_num = {}
+    for drug in drugs:
+        app_num = drug.get("application_number")
+        if app_num:
+            drugs_by_app_num.setdefault(app_num, []).append(drug)
+
     to_process = []
     for drug in drugs:
         app_num = drug.get("application_number", "")
@@ -248,17 +254,15 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                     condition = parts[1].strip().strip('"').strip("'")
                     if app_num and condition:
                         summaries_cache[app_num] = condition
-                        for drug in drugs:
-                            if drug.get("application_number") == app_num:
-                                drug["indication_summary"] = condition
+                        for drug in drugs_by_app_num.get(app_num, []):
+                            drug["indication_summary"] = condition
 
         except Exception as e:
             print(f"  Warning: LLM summarization batch failed: {e}", file=sys.stderr)
             for app_num, brand, text in batch:
                 summaries_cache[app_num] = brand
-                for drug in drugs:
-                    if drug.get("application_number") == app_num:
-                        drug["indication_summary"] = drug.get("brand_name", "") or drug.get("generic_name", "")
+                for drug in drugs_by_app_num.get(app_num, []):
+                    drug["indication_summary"] = drug.get("brand_name", "") or drug.get("generic_name", "")
 
         time.sleep(0.5)
 
