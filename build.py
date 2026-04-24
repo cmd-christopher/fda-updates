@@ -178,7 +178,21 @@ def format_pi_text(text):
     text = text.strip()
 
     # Strip the top-level section header like "2 DOSAGE AND ADMINISTRATION"
-    text = re.sub(r"^\d+\s+[A-Z][A-Z\s&]+\s*", "", text)
+    # Use known FDA section titles to avoid greedily consuming the first word of content
+    # (which is often a drug name in ALL CAPS like "COSENTYX" or a Title Case word like "Prior")
+    _SECTION_HEADERS = (
+        "INDICATIONS AND USAGE|INDICATIONS & USAGE|"
+        "DOSAGE AND ADMINISTRATION|DOSAGE & ADMINISTRATION|"
+        "DOSAGE FORMS AND STRENGTHS|DOSAGE FORM AND STRENGTHS|"
+        "CONTRAINDICATIONS|WARNINGS AND PRECAUTIONS|"
+        "ADVERSE REACTIONS|DRUG INTERACTIONS|"
+        "USE IN SPECIFIC POPULATIONS|OVERDOSAGE|"
+        "DESCRIPTION|CLINICAL PHARMACOLOGY|CLINICAL STUDIES|"
+        "NONCLINICAL TOXICOLOGY|HOW SUPPLIED|"
+        "MECHANISM OF ACTION|PATIENT COUNSELING INFORMATION|"
+        "ABUSE AND DEPENDENCE|BOXED WARNING"
+    )
+    text = re.sub(rf"^\d+\s+(?:{_SECTION_HEADERS})\s*", "", text)
 
     # Detect indication lead-in pattern and convert to bullet list
     # Pattern: "DRUG is indicated/recommended for [the treatment of]: item1. (1.1) item2. (1.2) ..."
