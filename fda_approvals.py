@@ -157,11 +157,6 @@ def extract_short_indication(text, brand_name=""):
     return text[:80].strip()
 
 
-def truncate_indication(text, max_length=100):
-    """Backward-compatible wrapper: returns extract_short_indication result."""
-    return extract_short_indication(text)
-
-
 def load_indication_summaries(path=INDICATION_SUMMARIES_PATH):
     """Load previously LLM-summarized indications from cache."""
     if not os.path.exists(path):
