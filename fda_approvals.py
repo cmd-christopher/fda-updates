@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -549,6 +550,33 @@ def save_label_cache(drugs, cache_path):
         json.dump(cache, f, indent=2)
 
 
+def _process_drug_label(drug_info):
+    i, drug, total, use_cache, previous_data = drug_info
+    name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
+    app_num = drug.get("application_number", "")
+
+    # Check if we can reuse cached label data
+    if use_cache and app_num in previous_data and previous_data[app_num].get("label"):
+        drug["label"] = previous_data[app_num]["label"]
+        drug["indication_preview"] = extract_short_indication(
+            drug["label"].get("indications_and_usage", [""])[0] if isinstance(drug["label"].get("indications_and_usage"), list) else drug["label"].get("indications_and_usage", ""),
+            brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
+        )
+        print(f"  [{i}/{total}] {name} (cached)", file=sys.stderr)
+    else:
+        print(f"  [{i}/{total}] {name}...", file=sys.stderr)
+        label = fetch_label(drug)
+        drug["label"] = label
+        if label:
+            drug["indication_preview"] = extract_short_indication(
+                label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", ""),
+                brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
+            )
+        else:
+            drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+    return drug
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Retrieve FDA prescription drug approvals and full label information."
@@ -641,29 +669,15 @@ def main():
             print(f"Cache: {cached_count} previously fetched labels available.", file=sys.stderr)
 
         print("Fetching labels...", file=sys.stderr)
-        for i, drug in enumerate(drugs, 1):
-            name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
-            app_num = drug.get("application_number", "")
 
-            # Check if we can reuse cached label data
-            if args.cache and app_num in previous_data and previous_data[app_num].get("label"):
-                drug["label"] = previous_data[app_num]["label"]
-                drug["indication_preview"] = extract_short_indication(
-                    drug["label"].get("indications_and_usage", [""])[0] if isinstance(drug["label"].get("indications_and_usage"), list) else drug["label"].get("indications_and_usage", ""),
-                    brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
-                )
-                print(f"  [{i}/{len(drugs)}] {name} (cached)", file=sys.stderr)
-            else:
-                print(f"  [{i}/{len(drugs)}] {name}...", file=sys.stderr)
-                label = fetch_label(drug)
-                drug["label"] = label
-                if label:
-                    drug["indication_preview"] = extract_short_indication(
-                        label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", ""),
-                        brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
-                    )
-                else:
-                    drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+        # Prepare arguments for the concurrent execution
+        total_drugs = len(drugs)
+        drug_infos = [(i, drug, total_drugs, args.cache, previous_data) for i, drug in enumerate(drugs, 1)]
+
+        # Fetch labels concurrently using a thread pool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            # list() forces the map to evaluate and consume results in order
+            drugs = list(executor.map(_process_drug_label, drug_infos))
 
         # Save label cache after processing
         if args.cache:
