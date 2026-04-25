@@ -38,6 +38,21 @@ def fetch_json(url):
         return json.loads(resp.read().decode())
 
 
+def _fetch_paginated_results(base_url, limit):
+    """Fetch all pages of results from an openFDA API endpoint."""
+    all_results = []
+    skip = 0
+    while True:
+        page_url = f"{base_url}&skip={skip}" if skip > 0 else base_url
+        data = fetch_json(page_url)
+        results = data.get("results", [])
+        all_results.extend(results)
+        if len(results) < limit or len(all_results) >= data.get("meta", {}).get("results", {}).get("total", 0):
+            break
+        skip += limit
+    return all_results
+
+
 def slugify(name):
     if not name:
         return ""
@@ -282,16 +297,7 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
     search = "+AND+".join(search_parts)
     url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
 
-    all_results = []
-    skip = 0
-    while True:
-        page_url = f"{url}&skip={skip}" if skip > 0 else url
-        data = fetch_json(page_url)
-        results = data.get("results", [])
-        all_results.extend(results)
-        if len(results) < limit or len(all_results) >= data.get("meta", {}).get("results", {}).get("total", 0):
-            break
-        skip += limit
+    all_results = _fetch_paginated_results(url, limit)
 
     drugs = []
     for entry in all_results:
@@ -376,16 +382,7 @@ def fetch_suppl_approvals(date_from, date_to, limit=100):
     search = f'submissions.submission_type:SUPPL+AND+submissions.submission_status:AP+AND+submissions.submission_class_code:EFFICACY{date_filter}'
     url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
 
-    all_results = []
-    skip = 0
-    while True:
-        page_url = f"{url}&skip={skip}" if skip > 0 else url
-        data = fetch_json(page_url)
-        results = data.get("results", [])
-        all_results.extend(results)
-        if len(results) < limit or len(all_results) >= data.get("meta", {}).get("results", {}).get("total", 0):
-            break
-        skip += limit
+    all_results = _fetch_paginated_results(url, limit)
 
     drugs = []
     seen_keys = set()
