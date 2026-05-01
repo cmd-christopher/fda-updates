@@ -342,6 +342,7 @@ def _style_xrefs_in_body(text):
 
 
 DATA_PATH = "data/approvals.json"
+NON_DIGIT_RE = re.compile(r"\D")
 TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "site"
 
@@ -396,7 +397,7 @@ def main():
         base_slug = drug["slug"]
         slug = base_slug
         if slug in slug_counts:
-            digits = re.sub(r"\D", "", drug.get("application_number", ""))
+            digits = NON_DIGIT_RE.sub("", drug.get("application_number", ""))
             slug = f"{base_slug}-{digits}" if digits else f"{base_slug}-{slug_counts[base_slug]}"
         if slug in slug_counts:
             date_suffix = drug.get("approval_date", "").replace("-", "")
