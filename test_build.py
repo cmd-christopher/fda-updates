@@ -33,5 +33,18 @@ class TestFormatDate(unittest.TestCase):
         self.assertEqual(build.format_date(["2023-10-27"]), ["2023-10-27"])
 
 
+class TestFormatPiText(unittest.TestCase):
+    """Test the format_pi_text() function in build.py."""
+
+    def test_out_of_bounds_placeholders(self):
+        """Test that invalid %%TABLE...%% or %%LIST...%% placeholders don't raise IndexError."""
+        # This simulates an attacker injecting a large placeholder number
+        text = "Some text with %%TABLE999%% and %%LIST888%% in it."
+        result = build.format_pi_text(text)
+
+        # The function should ignore invalid placeholders and leave them as is
+        self.assertIn("%%TABLE999%%", result)
+        self.assertIn("%%LIST888%%", result)
+
 if __name__ == "__main__":
     unittest.main()

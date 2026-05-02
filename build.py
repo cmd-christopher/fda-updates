@@ -287,8 +287,16 @@ def format_pi_text(text):
                 continue
 
             # Reinsert protected tables/lists
-            body = re.sub(r"%%TABLE(\d+)%%", lambda m: tables[int(m.group(1))], body)
-            body = re.sub(r"%%LIST(\d+)%%", lambda m: lists_html[int(m.group(1))], body)
+            body = re.sub(
+                r"%%TABLE(\d+)%%",
+                lambda m: tables[int(m.group(1))] if int(m.group(1)) < len(tables) else m.group(0),
+                body
+            )
+            body = re.sub(
+                r"%%LIST(\d+)%%",
+                lambda m: lists_html[int(m.group(1))] if int(m.group(1)) < len(lists_html) else m.group(0),
+                body
+            )
 
             # Style cross-references
             body = _style_xrefs_in_body(body)
