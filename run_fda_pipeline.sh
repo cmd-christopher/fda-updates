@@ -14,9 +14,7 @@ ENV_FILE="$HOME/.config/fda-pipeline/.env"
 # Per D-07: Pushover keys and LLM API key stored in ~/.config/fda-pipeline/.env
 # File contains: PUSHOVER_APP_KEY=..., PUSHOVER_USER_KEY=..., LLM_API_KEY=...
 if [[ -f "$ENV_FILE" ]]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
+  export $(grep -v '^#' "$ENV_FILE" | xargs)
 fi
 
 # ─── Configuration ──────────────────────────────────────────────────
