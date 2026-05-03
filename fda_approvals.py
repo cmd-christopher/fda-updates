@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import unicodedata
 from datetime import datetime
@@ -24,6 +25,27 @@ from urllib.parse import quote
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
 LABEL_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".label_cache.json")
+
+class RateLimiter:
+    def __init__(self, delay):
+        self.delay = delay
+        self.lock = threading.Lock()
+        self.last_call = 0.0
+
+    def wait(self):
+        with self.lock:
+            now = time.time()
+            sleep_time = self.delay - (now - self.last_call)
+            if sleep_time > 0:
+                self.last_call = now + sleep_time
+            else:
+                sleep_time = 0
+                self.last_call = now
+
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+api_rate_limiter = RateLimiter(REQUEST_DELAY)
 INDICATION_SUMMARIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".indication_summaries.json")
 LLM_API_URL = "https://ollama.com/v1/chat/completions"
 LLM_MODEL = "cogito-2.1:671b"
@@ -472,7 +494,7 @@ def fetch_label(drug):
 
     try:
         url = f"{API_BASE}label.json?{search}"
-        time.sleep(REQUEST_DELAY)
+        api_rate_limiter.wait()
         data = fetch_json(url)
         results = data.get("results", [])
         if not results:
