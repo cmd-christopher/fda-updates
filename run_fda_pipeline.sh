@@ -34,13 +34,14 @@ send_failure_notification() {
     echo "[notification] Pushover keys not configured. Skipping notification." >&2
     return 0
   fi
-  curl -s --max-time 10 \
-    -F "token=${PUSHOVER_APP_KEY}" \
-    -F "user=${PUSHOVER_USER_KEY}" \
+  cat <<EOF | curl -s --max-time 10 -K - \
     -F "title=FDA Pipeline Failed" \
     -F "message=Step '${step}' failed: ${error_msg}" \
     -F "priority=1" \
     https://api.pushover.net/1/messages.json >/dev/null 2>&1 || true
+form="token=${PUSHOVER_APP_KEY}"
+form="user=${PUSHOVER_USER_KEY}"
+EOF
 }
 
 # ─── Step 1: Fetch data from openFDA ────────────────────────────────
