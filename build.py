@@ -38,22 +38,45 @@ def sanitize_html(text):
     return Markup(text)
 
 
-def _split_long_paragraphs(text, max_chars=2500):
-    """Split text into multiple <p> blocks if it exceeds max_chars."""
+def _split_long_paragraphs(text, max_chars=800):
+    """Split text into multiple <p> blocks if it exceeds max_chars.
+    Also splits at colons if they appear to separate logical blocks.
+    """
     if len(text) <= max_chars:
-        return text
-    # Try sentence boundaries first
-    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
+        # Still try to split at colons if they look like headings
+        if ":" in text:
+            parts = re.split(r"(?<=[a-z])\.\s+(?=[A-Z])|(?<=:)\s+(?=[A-Z])", text)
+            if len(parts) > 1:
+                return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
+        return f"<p>{text}</p>"
+
+    # Split at sentence boundaries or colons
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])|(?<=:)\s+(?=[A-Z])", text)
     chunks = []
     current = []
     current_len = 0
 
-    # Do both checks and building the chunks in a single pass
     for sentence in sentences:
         s_len = len(sentence)
         if s_len > max_chars:
-            chunks = None
-            break
+            # Force split long sentence
+            if current:
+                chunks.append("<p>" + " ".join(current) + "</p>")
+                current = []
+                current_len = 0
+            
+            temp_sentence = sentence
+            while len(temp_sentence) > max_chars:
+                split_at = temp_sentence.rfind(" ", 0, max_chars)
+                if split_at == -1:
+                    split_at = max_chars
+                chunks.append(f"<p>{temp_sentence[:split_at]}</p>")
+                temp_sentence = temp_sentence[split_at:].lstrip()
+            
+            if temp_sentence:
+                current.append(temp_sentence)
+                current_len = len(temp_sentence)
+            continue
 
         if current and current_len + s_len > max_chars:
             chunks.append("<p>" + " ".join(current) + "</p>")
@@ -63,32 +86,9 @@ def _split_long_paragraphs(text, max_chars=2500):
         current.append(sentence)
         current_len += s_len + 1
 
-    if chunks is not None:
-        if current:
-            chunks.append("<p>" + " ".join(current) + "</p>")
-        return "\n".join(chunks)
+    if current:
+        chunks.append("<p>" + " ".join(current) + "</p>")
 
-    # Fallback: split at category boundaries like "System Disorders: "
-    parts = re.split(r"(?<=:)\s+(?=[A-Z])", text)
-    if len(parts) > 1:
-        # Check max part length directly
-        for p in parts:
-            if len(p) > max_chars:
-                parts = None
-                break
-        if parts is not None:
-            return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
-    # Last resort: force split at max_chars boundaries
-    chunks = []
-    while text:
-        if len(text) <= max_chars:
-            chunks.append(f"<p>{text}</p>")
-            break
-        split_at = text.rfind(" ", max_chars - 200, max_chars)
-        if split_at == -1:
-            split_at = max_chars
-        chunks.append(f"<p>{text[:split_at]}</p>")
-        text = text[split_at:].lstrip()
     return "\n".join(chunks)
 
 
@@ -247,16 +247,19 @@ def format_pi_text(text):
 
     sections = []
     last_end = 0
-    for m in re.finditer(r"(?:^|\.\s)(\d+(?:\.\d+)+)\s+([A-Z])", text):
+    # IMPROVED REGEX: Allow space, start of string, or closing parenthesis
+    for m in re.finditer(r"(?:^|[\s\)])(\d+(?:\.\d+)+)\s+([A-Z])", text):
         num = m.group(1)
-        match_start = m.start()
+        # Find where the number actually starts in the match (skip the leading space/paren if any)
+        num_start = m.start() + m.group(0).find(num)
+        
         title_start = m.end() - len(m.group(2))
         after_num = text[title_start:]
         title_words = after_num.split()
         title = _parse_heading_title(title_words)
 
         if title and len(title) > 2:
-            body_before = text[last_end:match_start].strip()
+            body_before = text[last_end:num_start].strip()
             if body_before:
                 sections.append(("body", body_before))
             sections.append(("heading", num, title))
@@ -300,6 +303,10 @@ def format_pi_text(text):
 
             # Style cross-references
             body = _style_xrefs_in_body(body)
+
+            # Bold "Title Case: " or "ALL CAPS: " patterns (sub-sub-headings)
+            # Allows for common connectors like 'of', 'in', 'and'
+            body = re.sub(r"(^|<p>|:\s+)([A-Z][A-Z0-9a-z]*(?:\s+(?:and|or|of|in|for|with|to|at|vs|[A-Z][A-Z0-9a-z]*)){0,6}):\s+", r'\1<strong>\2:</strong> ', body)
 
             # Detect simple bullet lists (• or dash-prefixed lines)
             lines = body.split("\n")

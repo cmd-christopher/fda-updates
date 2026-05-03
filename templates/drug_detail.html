@@ -70,14 +70,28 @@
     ("nonclinical_toxicology", "Nonclinical Toxicology", 13, False),
   ] %}
 
+  <div class="section-nav">
+    <p class="nav-label">Quick Links:</p>
+    <div class="nav-pills">
+      {% for section_key, section_title, section_num, default_open in sections %}
+        {% if drug.label.get(section_key) %}
+          <a href="#section-{{ section_key }}" class="nav-pill">{{ section_title }}</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
   {% for section_key, section_title, section_num, default_open in sections %}
     {% if drug.label.get(section_key) %}
-  <details {% if default_open %}open{% endif %} class="pi-section">
+  <details {% if default_open %}open{% endif %} class="pi-section" id="section-{{ section_key }}">
     <summary><span class="section-number">{{ section_num }}.</span> {{ section_title }}</summary>
     <div class="section-content">
       {% for paragraph in drug.label[section_key] %}
         {{ paragraph | sanitize_html | format_pi_text }}
       {% endfor %}
+      <div class="section-footer">
+        <a href="#" class="top-link">↑ Back to Top</a>
+      </div>
     </div>
   </details>
     {% endif %}
