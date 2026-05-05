@@ -378,26 +378,27 @@ def format_date(value):
         return value
 
 
-def main():
-    # Verify required assets exist
+def verify_assets():
     for asset in REQUIRED_ASSETS:
         if not os.path.exists(asset):
             print(f"Error: Required asset missing: {asset}", file=sys.stderr)
             sys.exit(1)
 
+
+def load_data():
     if not os.path.exists(DATA_PATH):
         print(f"Error: {DATA_PATH} not found. Run fda_approvals.py first.", file=sys.stderr)
         sys.exit(1)
 
     try:
         with open(DATA_PATH) as f:
-            data = json.load(f)
+            return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         print(f"Error reading {DATA_PATH}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    drugs = data.get("drugs", [])
 
+def validate_drug_data(drugs):
     required_fields = ["brand_name", "generic_name", "approval_date", "application_number", "type_badge", "slug"]
     for i, drug in enumerate(drugs):
         name = drug.get("brand_name") or drug.get("generic_name") or f"drug_{i}"
@@ -406,7 +407,8 @@ def main():
                 print(f"Error: Missing required field '{field}' in {name}", file=sys.stderr)
                 sys.exit(1)
 
-    # Resolve slug collisions — append app number digits, then date suffix
+
+def resolve_slug_collisions(drugs):
     slug_counts = {}
     for drug in drugs:
         base_slug = drug["slug"]
@@ -420,22 +422,23 @@ def main():
         drug["slug"] = slug
         slug_counts[slug] = slug_counts.get(slug, 0) + 1
 
-    # Compute last_updated from data metadata (AUTO-05)
+
+def compute_last_updated(data):
     query_meta = data.get("query", {})
     date_to = query_meta.get("date_to")
     if date_to:
         try:
             dt = datetime.strptime(date_to, "%Y-%m-%d")
-            last_updated = dt.strftime("%B %d, %Y")
+            return dt.strftime("%B %d, %Y")
         except (ValueError, TypeError):
-            last_updated = datetime.now().strftime("%B %d, %Y")
+            return datetime.now().strftime("%B %d, %Y")
     else:
         # Fallback: use file modification time
         mtime = os.path.getmtime(DATA_PATH)
-        last_updated = datetime.fromtimestamp(mtime).strftime("%B %d, %Y")
+        return datetime.fromtimestamp(mtime).strftime("%B %d, %Y")
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+def setup_jinja_env():
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
         autoescape=select_autoescape(["html", "xml"]),
@@ -443,7 +446,11 @@ def main():
     env.filters["format_date"] = format_date
     env.filters["sanitize_html"] = sanitize_html
     env.filters["format_pi_text"] = format_pi_text
+    return env
 
+
+def generate_index_page(env, drugs, last_updated, date_to):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     template = env.get_template("index.html")
     html = template.render(
         drugs=drugs,
@@ -457,7 +464,8 @@ def main():
 
     print(f"Built {output_path} with {len(drugs)} drug approvals (data through {date_to or 'unknown'})")
 
-    # Generate detail pages for each drug
+
+def generate_detail_pages(env, drugs, last_updated):
     drugs_dir = os.path.join(OUTPUT_DIR, "drugs")
     if os.path.isdir(drugs_dir):
         for f in os.listdir(drugs_dir):
@@ -477,6 +485,24 @@ def main():
             f.write(detail_html)
 
     print(f"Built {len(drugs)} drug detail pages in {drugs_dir}")
+
+
+def main():
+    verify_assets()
+    data = load_data()
+    drugs = data.get("drugs", [])
+
+    validate_drug_data(drugs)
+    resolve_slug_collisions(drugs)
+
+    last_updated = compute_last_updated(data)
+    env = setup_jinja_env()
+
+    query_meta = data.get("query", {})
+    date_to = query_meta.get("date_to")
+
+    generate_index_page(env, drugs, last_updated, date_to)
+    generate_detail_pages(env, drugs, last_updated)
 
 
 if __name__ == "__main__":
