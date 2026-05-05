@@ -597,7 +597,7 @@ def _process_drug_label(drug_info):
     return drug
 
 
-def main():
+def get_parser():
     parser = argparse.ArgumentParser(
         description="Retrieve FDA prescription drug approvals and full label information."
     )
@@ -638,16 +638,11 @@ def main():
         "--llm-api-key", default=None,
         help="API key for the LLM service (or set LLM_API_KEY env var)"
     )
+    return parser
 
-    args = parser.parse_args()
 
-    llm_key = args.llm_api_key or os.environ.get("LLM_API_KEY", "")
-
-    date_from = datetime.strptime(args.date_from, "%Y-%m-%d")
-    date_to = datetime.strptime(args.date_to, "%Y-%m-%d")
-
+def fetch_all_approvals(args, date_from, date_to):
     drugs = []
-
     if args.submission_type == "nme":
         print(f"Fetching NME approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
         drugs = fetch_drugsfda_approvals(date_from, date_to, submission_type="Type 1 - New Molecular Entity", limit=args.limit)
@@ -680,7 +675,10 @@ def main():
                 deduped.append(d)
         drugs = deduped
         print(f"After deduplication: {len(drugs)} unique approval events.", file=sys.stderr)
+    return drugs
 
+
+def process_labels(args, drugs):
     if not args.skip_labels:
         # Load previous label data when --cache is provided
         previous_data = load_previous_approvals() if args.cache else {}
@@ -707,8 +705,10 @@ def main():
         for drug in drugs:
             drug["label"] = None
             drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
+    return drugs
 
-    # LLM-based indication summarization
+
+def summarize_indications(args, drugs, llm_key):
     if args.summarize:
         if not llm_key:
             print("Warning: --summarize requires --llm-api-key or LLM_API_KEY env var. Skipping.", file=sys.stderr)
@@ -719,6 +719,8 @@ def main():
             summarized = sum(1 for d in drugs if d.get("indication_summary"))
             print(f"Summarized {summarized}/{len(drugs)} indications via LLM", file=sys.stderr)
 
+
+def write_output(args, drugs):
     output = {
         "query": {
             "date_from": args.date_from,
@@ -737,6 +739,21 @@ def main():
         print(f"Output written to {args.output}", file=sys.stderr)
     else:
         print(json_str)
+
+
+def main():
+    parser = get_parser()
+    args = parser.parse_args()
+
+    llm_key = args.llm_api_key or os.environ.get("LLM_API_KEY", "")
+
+    date_from = datetime.strptime(args.date_from, "%Y-%m-%d")
+    date_to = datetime.strptime(args.date_to, "%Y-%m-%d")
+
+    drugs = fetch_all_approvals(args, date_from, date_to)
+    drugs = process_labels(args, drugs)
+    summarize_indications(args, drugs, llm_key)
+    write_output(args, drugs)
 
 
 if __name__ == "__main__":
