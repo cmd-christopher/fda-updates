@@ -60,6 +60,16 @@ def fetch_json(url):
         return json.loads(resp.read().decode())
 
 
+def safe_get(data, keys, default=None):
+    """Safely get a value from nested dictionaries."""
+    for key in keys:
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+        else:
+            return default
+    return data if data is not None else default
+
+
 def _fetch_paginated_results(base_url, limit):
     """Fetch all pages of results from an openFDA API endpoint."""
     all_results = []
@@ -69,7 +79,7 @@ def _fetch_paginated_results(base_url, limit):
         data = fetch_json(page_url)
         results = data.get("results", [])
         all_results.extend(results)
-        if len(results) < limit or len(all_results) >= data.get("meta", {}).get("results", {}).get("total", 0):
+        if len(results) < limit or len(all_results) >= safe_get(data, ["meta", "results", "total"], 0):
             break
         skip += limit
     return all_results
