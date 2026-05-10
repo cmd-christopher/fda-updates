@@ -501,7 +501,7 @@ def fetch_suppl_approvals(date_from, date_to, limit=100):
 
 def fetch_label(drug):
     app_num = drug.get("application_number", "")
-    search = f'search=openfda.application_number:"{app_num}"&limit=1'
+    search = f'search=openfda.application_number:"{quote(app_num)}"&limit=1'
 
     try:
         url = f"{API_BASE}label.json?{search}"
