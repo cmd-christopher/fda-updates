@@ -6,6 +6,7 @@ import re
 import sys
 import os
 from datetime import datetime
+import bleach
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
@@ -24,18 +25,33 @@ def sanitize_html(text):
     if not text:
         return Markup("")
 
-    # Strip <script>, <style>, <iframe> tags and their content
+    # Strip <script>, <style>, <iframe> tags and their content first
+    # This prevents bleach from leaving raw JS/CSS text behind on the page
     text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"<iframe[^>]*>.*?</iframe>", "", text, flags=re.DOTALL | re.IGNORECASE)
 
-    # Strip event attributes (on*="...")
-    text = re.sub(r'\s+on\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', "", text, flags=re.IGNORECASE)
+    allowed_tags = [
+        "table", "p", "br", "ul", "ol", "li", "b", "i", "strong",
+        "em", "h1", "h2", "h3", "h4", "h5", "h6", "sub", "sup",
+        "div", "span", "a", "thead", "tbody", "tr", "td", "th"
+    ]
 
-    # Strip style attributes
-    text = re.sub(r'\s+style\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', "", text, flags=re.IGNORECASE)
+    allowed_attributes = {
+        "*": ["class", "id"],
+        "a": ["href", "title"]
+    }
 
-    return Markup(text)
+    # Bleach will safely strip disallowed tags like script, style, and iframe
+    # It will also strip disallowed attributes like on* and style
+    cleaned_text = bleach.clean(
+        text,
+        tags=allowed_tags,
+        attributes=allowed_attributes,
+        strip=True
+    )
+
+    return Markup(cleaned_text)
 
 
 def _split_long_paragraphs(text, max_chars=800):
