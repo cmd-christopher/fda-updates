@@ -46,5 +46,38 @@ class TestFormatPiText(unittest.TestCase):
         self.assertIn("%%TABLE999%%", result)
         self.assertIn("%%LIST888%%", result)
 
+class TestSanitizeHtml(unittest.TestCase):
+    """Test the sanitize_html() function in build.py."""
+
+    def test_safe_tags(self):
+        """Test that safe tags are preserved."""
+        html = '<p class="safe">Hello <b>World</b></p>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p class="safe">Hello <b>World</b></p>')
+
+    def test_script_removal(self):
+        """Test that <script> tags and content are removed."""
+        html = '<p>Test</p><script>alert(1)</script>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p>Test</p>')
+
+    def test_style_attribute_removal(self):
+        """Test that style attributes are removed."""
+        html = '<p style="color: red;">Red text</p>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p>Red text</p>')
+
+    def test_event_attribute_removal(self):
+        """Test that on* event attributes are removed."""
+        html = '<p onclick="alert(1)">Click me</p>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p>Click me</p>')
+
+    def test_iframe_removal(self):
+        """Test that <iframe> tags are removed."""
+        html = '<div><iframe src="evil.com"></iframe></div>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<div></div>')
+
 if __name__ == "__main__":
     unittest.main()
