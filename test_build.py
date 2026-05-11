@@ -55,6 +55,23 @@ class TestSanitizeHtml(unittest.TestCase):
         result = build.sanitize_html(html)
         self.assertEqual(str(result), '<p class="safe">Hello <b>World</b></p>')
 
+    def test_empty_and_none(self):
+        """Test with empty strings and None."""
+        self.assertEqual(str(build.sanitize_html("")), "")
+        self.assertEqual(str(build.sanitize_html(None)), "")
+
+    def test_disallowed_tags_removal(self):
+        """Test that disallowed tags are stripped but inner content is preserved if applicable."""
+        html = '<p>Test</p><form><input type="text">Submit</form>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p>Test</p>\nSubmit')
+
+    def test_style_tag_removal(self):
+        """Test that <style> tags and their content are removed."""
+        html = '<style>body { color: red; }</style><p>Test</p>'
+        result = build.sanitize_html(html)
+        self.assertEqual(str(result), '<p>Test</p>')
+
     def test_script_removal(self):
         """Test that <script> tags and content are removed."""
         html = '<p>Test</p><script>alert(1)</script>'
