@@ -38,3 +38,4 @@ site/
 
 # Label cache (derived data, not version-controlled)
 data/.label_cache.jsondata/.indication_summaries.json
+.coverage
