@@ -118,6 +118,8 @@ _SENTENCE_STARTERS = frozenset({
 
 _CONNECTORS = frozenset({"of", "and", "in", "for", "with"})
 
+SUBSEC_HEADING_RE = re.compile(r"(?:^|[\s\)])(\d+(?:\.\d+)+)\s+([A-Z])")
+
 
 def _parse_heading_title(words, max_plain=6, max_chars=55):
     """Parse sub-section heading title from word list after the section number."""
@@ -264,7 +266,7 @@ def format_pi_text(text):
     sections = []
     last_end = 0
     # IMPROVED REGEX: Allow space, start of string, or closing parenthesis
-    for m in re.finditer(r"(?:^|[\s\)])(\d+(?:\.\d+)+)\s+([A-Z])", text):
+    for m in SUBSEC_HEADING_RE.finditer(text):
         num = m.group(1)
         # Find where the number actually starts in the match (skip the leading space/paren if any)
         num_start = m.start() + m.group(0).find(num)
