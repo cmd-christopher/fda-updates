@@ -669,9 +669,19 @@ def fetch_all_approvals(args, date_from, date_to):
             "Type 4 - New Combination",
         ]
         orig_drugs = []
-        for st in orig_types:
-            orig_drugs.extend(fetch_drugsfda_approvals(date_from, date_to, submission_type=st, limit=args.limit))
-        suppl_drugs = fetch_suppl_approvals(date_from, date_to, limit=args.limit)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            orig_futures = [
+                executor.submit(fetch_drugsfda_approvals, date_from, date_to, submission_type=st, limit=args.limit)
+                for st in orig_types
+            ]
+            suppl_future = executor.submit(fetch_suppl_approvals, date_from, date_to, limit=args.limit)
+
+            for future in concurrent.futures.as_completed(orig_futures):
+                orig_drugs.extend(future.result())
+
+            suppl_drugs = suppl_future.result()
+
         print(f"Found {len(orig_drugs)} ORIG (NME+Type2+Type4) and {len(suppl_drugs)} SUPPL approvals.", file=sys.stderr)
         drugs = orig_drugs + suppl_drugs
         drugs.sort(key=lambda d: d.get("approval_date", ""), reverse=True)
