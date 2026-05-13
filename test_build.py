@@ -96,5 +96,55 @@ class TestSanitizeHtml(unittest.TestCase):
         result = build.sanitize_html(html)
         self.assertEqual(str(result), '<div></div>')
 
+from unittest.mock import patch
+from datetime import datetime
+
+class TestComputeLastUpdated(unittest.TestCase):
+    """Test the compute_last_updated() function in build.py."""
+
+    def test_valid_date_to(self):
+        """Test with a valid YYYY-MM-DD date_to format."""
+        data = {"query": {"date_to": "2023-10-27"}}
+        result = build.compute_last_updated(data)
+        self.assertEqual(result, "October 27, 2023")
+
+    @patch('build.datetime')
+    def test_invalid_date_format(self, mock_datetime):
+        """Test with an invalid date_to format (ValueError)."""
+        # We need to preserve strptime to raise ValueError
+        mock_datetime.strptime.side_effect = ValueError
+        # Mock now() to return a fixed datetime for predictability
+        fixed_now = datetime(2024, 1, 5)
+        mock_datetime.now.return_value = fixed_now
+
+        data = {"query": {"date_to": "invalid-date"}}
+        result = build.compute_last_updated(data)
+        self.assertEqual(result, "January 05, 2024")
+
+    @patch('build.datetime')
+    def test_invalid_date_type(self, mock_datetime):
+        """Test with an invalid date_to type (TypeError)."""
+        mock_datetime.strptime.side_effect = TypeError
+        fixed_now = datetime(2024, 1, 5)
+        mock_datetime.now.return_value = fixed_now
+
+        data = {"query": {"date_to": 12345}}
+        result = build.compute_last_updated(data)
+        self.assertEqual(result, "January 05, 2024")
+
+    @patch('os.path.getmtime')
+    def test_missing_date_to(self, mock_getmtime):
+        """Test missing date_to which falls back to file modification time."""
+        # 1704412800 is 2024-01-05 00:00:00 UTC (or local equivalent)
+        # Let's mock a specific timestamp
+        test_timestamp = 1704412800
+        mock_getmtime.return_value = test_timestamp
+
+        data = {"query": {}}
+        result = build.compute_last_updated(data)
+
+        expected_date = datetime.fromtimestamp(test_timestamp).strftime("%B %d, %Y")
+        self.assertEqual(result, expected_date)
+
 if __name__ == "__main__":
     unittest.main()
