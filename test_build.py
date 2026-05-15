@@ -146,5 +146,66 @@ class TestComputeLastUpdated(unittest.TestCase):
         expected_date = datetime.fromtimestamp(test_timestamp).strftime("%B %d, %Y")
         self.assertEqual(result, expected_date)
 
+class TestStyleXrefsInBody(unittest.TestCase):
+    """Test the _style_xrefs_in_body() function in build.py."""
+
+    def test_bracketed_references(self):
+        """Test [see ...] references containing numbers in parentheses."""
+        text = "This is a test [see Warnings and Precautions (5.1)]."
+        expected = 'This is a test [see Warnings and Precautions <span class="xref">5.1</span>].'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+        text = "[see Dosage (2)]"
+        expected = '[see Dosage <span class="xref">2</span>]'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+        # Case-insensitive "see"
+        text = "[SEE WARNINGS (5.1)]"
+        expected = '[SEE WARNINGS <span class="xref">5.1</span>]'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+    def test_standalone_parentheses(self):
+        """Test standalone numbers in parentheses."""
+        text = "Side effects include nausea (6.1)."
+        expected = 'Side effects include nausea <span class="xref">(6.1)</span>.'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+        text = "Dose: 10 mg (2)."
+        expected = 'Dose: 10 mg <span class="xref">(2)</span>.'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+    def test_multiple_numbers(self):
+        """Test multiple numbers inside parentheses."""
+        text = "[see Warnings (5.1, 5.2)]"
+        expected = '[see Warnings <span class="xref">5.1, 5.2</span>]'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+        text = "See section (6.1, 6.2)."
+        expected = 'See section <span class="xref">(6.1, 6.2)</span>.'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+        text = "[see Info (1, 2.1, 3)]"
+        expected = '[see Info <span class="xref">1, 2.1, 3</span>]'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
+    def test_negative_cases(self):
+        """Test cases that should not be styled."""
+        text = "(not a number)"
+        self.assertEqual(build._style_xrefs_in_body(text), text)
+
+        text = "()"
+        self.assertEqual(build._style_xrefs_in_body(text), text)
+
+        text = "[see Details (N/A)]"
+        self.assertEqual(build._style_xrefs_in_body(text), text)
+
+    def test_mixed_cases(self):
+        """Test a mix of styled and unstyled parentheses."""
+        text = "Call (555) 123-4567 [see Contact (8.1)] or visit (website)."
+        # Note: The current implementation of _style_xrefs_in_body wraps ANY standalone integer or float in parentheses.
+        # Thus, (555) becomes <span class="xref">(555)</span>. This behavior might be unintentional but we assert the current behavior.
+        expected = 'Call <span class="xref">(555)</span> 123-4567 [see Contact <span class="xref">8.1</span>] or visit (website).'
+        self.assertEqual(build._style_xrefs_in_body(text), expected)
+
 if __name__ == "__main__":
     unittest.main()
