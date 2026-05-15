@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+from collections import defaultdict
 import concurrent.futures
 import json
 import os
@@ -228,11 +229,11 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
 
     Batches drugs to minimize API calls. Uses cached summaries for previously processed drugs.
     """
-    drugs_by_app_num = {}
+    drugs_by_app_num = defaultdict(list)
     for drug in drugs:
         app_num = drug.get("application_number")
         if app_num:
-            drugs_by_app_num.setdefault(app_num, []).append(drug)
+            drugs_by_app_num[app_num].append(drug)
 
     to_process = []
     for drug in drugs:
