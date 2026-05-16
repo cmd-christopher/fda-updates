@@ -120,6 +120,15 @@ _CONNECTORS = frozenset({"of", "and", "in", "for", "with"})
 
 SUBSEC_HEADING_RE = re.compile(r"(?:^|[\s\)])(\d+(?:\.\d+)+)\s+([A-Z])")
 
+_TITLE_WORD_RE_1 = re.compile(r"^[A-Z][a-z]+$")
+_TITLE_WORD_RE_2 = re.compile(r"^[A-Z][A-Z0-9]+[a-z]*$")
+_TITLE_WORD_RE_3 = re.compile(r"^[A-Z][a-z]+-[A-Z][a-z]+$")
+_LOWERCASE_RE = re.compile(r"^[a-z]+$")
+_LOWERCASE_START_RE = re.compile(r"^[a-z]")
+_ALL_CAPS_RE = re.compile(r"^[A-Z]{2,}$")
+_BULLET_RE = re.compile(r"^\s*[•\-\*]\s+")
+_HTML_TAG_START_RE = re.compile(r"^\s*<(?:h[1-6]|div|ul|ol|table|p|blockquote)", re.IGNORECASE)
+
 
 def _parse_heading_title(words, max_plain=6, max_chars=55):
     """Parse sub-section heading title from word list after the section number."""
@@ -129,15 +138,15 @@ def _parse_heading_title(words, max_plain=6, max_chars=55):
     while i < len(words):
         clean = words[i].strip(".,;:")
         is_title_word = bool(
-            re.match(r"^[A-Z][a-z]+$", clean)
-            or re.match(r"^[A-Z][A-Z0-9]+[a-z]*$", clean)
-            or re.match(r"^[A-Z][a-z]+-[A-Z][a-z]+$", clean)
+            _TITLE_WORD_RE_1.match(clean)
+            or _TITLE_WORD_RE_2.match(clean)
+            or _TITLE_WORD_RE_3.match(clean)
         )
 
         if is_title_word:
             if i + 1 < len(words):
                 next_w = words[i + 1].strip(".,;:")
-                if re.match(r"^[a-z]+$", next_w) and next_w not in _CONNECTORS:
+                if _LOWERCASE_RE.match(next_w) and next_w not in _CONNECTORS:
                     if title_parts:
                         break
 
@@ -155,7 +164,7 @@ def _parse_heading_title(words, max_plain=6, max_chars=55):
                 next_clean = words[i + 1].strip(".,;:")
                 is_next_connector = (
                     next_clean.lower() in _CONNECTORS
-                    and not bool(re.match(r"^[A-Z][a-z]+$", next_clean))
+                    and not bool(_TITLE_WORD_RE_1.match(next_clean))
                 )
                 if is_next_connector:
                     title_parts.append(next_clean)
@@ -164,9 +173,9 @@ def _parse_heading_title(words, max_plain=6, max_chars=55):
 
             if i + 1 < len(words):
                 nw = words[i + 1].strip(".,;:")
-                if re.match(r"^[A-Z]{2,}$", nw):
+                if _ALL_CAPS_RE.match(nw):
                     break
-                if re.match(r"^[a-z]", nw):
+                if _LOWERCASE_START_RE.match(nw):
                     break
                 if nw in _SENTENCE_STARTERS:
                     break
@@ -328,16 +337,16 @@ def format_pi_text(text):
 
             # Detect simple bullet lists (• or dash-prefixed lines)
             lines = body.split("\n")
-            has_bullets = sum(1 for l in lines if re.match(r"^\s*[•\-\*]\s+", l))
+            has_bullets = sum(1 for l in lines if _BULLET_RE.match(l))
             if has_bullets >= 2:
                 formatted_lines = []
                 in_list = False
                 for l in lines:
-                    if re.match(r"^\s*[•\-\*]\s+", l):
+                    if _BULLET_RE.match(l):
                         if not in_list:
                             formatted_lines.append('<ul class="pi-list">')
                             in_list = True
-                        item = re.sub(r"^\s*[•\-\*]\s+", "", l)
+                        item = _BULLET_RE.sub("", l)
                         formatted_lines.append(f"<li>{item}</li>")
                     else:
                         if in_list:
@@ -349,7 +358,7 @@ def format_pi_text(text):
                 body = "\n".join(formatted_lines)
 
             # Wrap in <p> or split long text
-            if not re.match(r"^\s*<(?:h[1-6]|div|ul|ol|table|p|blockquote)", body, re.IGNORECASE):
+            if not _HTML_TAG_START_RE.match(body):
                 body = _split_long_paragraphs(body)
 
             result_parts.append(body)
