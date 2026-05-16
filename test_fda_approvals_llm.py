@@ -76,5 +76,52 @@ class TestLoadIndicationSummaries(unittest.TestCase):
         result = fda_approvals.load_indication_summaries("dummy_path.json")
         self.assertEqual(result, {})
 
+class TestSaveIndicationSummaries(unittest.TestCase):
+    def test_creates_file_and_writes_json(self):
+        """Test that it correctly writes the dictionary to a JSON file."""
+        import tempfile
+        import json
+        import os
+
+        summaries = {"NDA123": "Disease A", "NDA456": "Disease B"}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            cache_path = f.name
+
+        try:
+            fda_approvals.save_indication_summaries(summaries, cache_path)
+
+            with open(cache_path) as cf:
+                data = json.load(cf)
+
+            self.assertEqual(data, summaries)
+        finally:
+            os.unlink(cache_path)
+
+    def test_creates_parent_directory(self):
+        """Test that it creates parent directories if they don't exist."""
+        import tempfile
+        import os
+        import json
+        import shutil
+
+        summaries = {"NDA789": "Disease C"}
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            nested_path = os.path.join(tmpdir, "nested", "dirs", "summaries.json")
+
+            self.assertFalse(os.path.exists(os.path.dirname(nested_path)))
+
+            fda_approvals.save_indication_summaries(summaries, nested_path)
+
+            self.assertTrue(os.path.exists(nested_path))
+
+            with open(nested_path) as f:
+                data = json.load(f)
+            self.assertEqual(data, summaries)
+        finally:
+            shutil.rmtree(tmpdir)
+
 if __name__ == '__main__':
     unittest.main()
