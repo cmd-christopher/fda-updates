@@ -292,5 +292,38 @@ class TestValidateDrugData(unittest.TestCase):
         self.assertEqual(cm.exception.code, 1)
         mock_stderr.write.assert_called()
 
+class TestVerifyAssets(unittest.TestCase):
+    """Test the verify_assets() function in build.py."""
+
+    @patch('os.path.exists')
+    def test_all_assets_exist(self, mock_exists):
+        """Test verify_assets when all required assets exist."""
+        # Setup mock to always return True
+        mock_exists.return_value = True
+
+        # Should not raise any exception or exit
+        build.verify_assets()
+
+        # Check that os.path.exists was called for each required asset
+        self.assertEqual(mock_exists.call_count, len(build.REQUIRED_ASSETS))
+        for asset in build.REQUIRED_ASSETS:
+            mock_exists.assert_any_call(asset)
+
+    @patch('sys.stderr')
+    @patch('os.path.exists')
+    def test_missing_asset(self, mock_exists, mock_stderr):
+        """Test verify_assets when an asset is missing."""
+        # Setup mock to return False (asset missing)
+        mock_exists.return_value = False
+
+        with self.assertRaises(SystemExit) as cm:
+            build.verify_assets()
+
+        self.assertEqual(cm.exception.code, 1)
+
+        # Verify stderr was written to
+        mock_stderr.write.assert_called()
+
+
 if __name__ == "__main__":
     unittest.main()
