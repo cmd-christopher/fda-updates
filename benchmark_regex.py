@@ -1,4 +1,3 @@
-import time
 import re
 
 text = "1.1 Heading 1\nSome text\n2.1 Heading 2\nMore text\n" * 1000
