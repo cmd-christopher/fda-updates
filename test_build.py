@@ -367,5 +367,61 @@ class TestSplitLongParagraphs(unittest.TestCase):
         self.assertEqual(build._split_long_paragraphs(text, max_chars=30), expected)
 
 
+class TestParseHeadingTitle(unittest.TestCase):
+    """Test the _parse_heading_title() function in build.py."""
+
+    def test_happy_paths(self):
+        """Test valid heading titles with single or multiple words and connectors."""
+        self.assertEqual(build._parse_heading_title(["Adverse"]), "Adverse")
+        self.assertEqual(build._parse_heading_title(["Adverse", "Reactions"]), "Adverse Reactions")
+        self.assertEqual(build._parse_heading_title(["Indications", "and", "Usage"]), "Indications and Usage")
+        self.assertEqual(build._parse_heading_title(["Dosage", "in", "Adults"]), "Dosage in Adults")
+        self.assertEqual(build._parse_heading_title(["Dosage", "for", "Adults"]), "Dosage for Adults")
+        self.assertEqual(build._parse_heading_title(["Warnings", "and", "Precautions"]), "Warnings and Precautions")
+
+    def test_constraints_max_plain(self):
+        """Test that the function stops when max_plain is exceeded."""
+        words = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"]
+        # With max_plain=6, it should stop after "Six" (6 words)
+        self.assertEqual(build._parse_heading_title(words, max_plain=6), "One Two Three Four Five Six")
+
+        # Test max_plain=2
+        self.assertEqual(build._parse_heading_title(words, max_plain=2), "One Two")
+
+    def test_constraints_max_chars(self):
+        """Test that the function stops when max_chars is exceeded."""
+        # Using words that pass _TITLE_WORD_RE_1
+        words = ["Super", "Long", "Title", "With", "Many", "Words", "That", "Exceeds", "Limit"]
+
+        # "Super Long Title" = 16 chars
+        # "Super Long Title With" = 21 chars > 19 limit
+        self.assertEqual(build._parse_heading_title(words, max_chars=19), "Super Long Title")
+
+    def test_breaking_conditions(self):
+        """Test various conditions that cause parsing to stop early."""
+        # Stop on lowercase word that is not a connector
+        self.assertEqual(build._parse_heading_title(["Dosage", "amount"]), "Dosage")
+
+        # Stop on all-caps word
+        self.assertEqual(build._parse_heading_title(["Dosage", "INFO"]), "Dosage")
+
+        # Stop on sentence starter
+        self.assertEqual(build._parse_heading_title(["Dosage", "The", "dosage", "is"]), "Dosage")
+
+        # Stop on non-title word (e.g. single letter uppercase 'A' is not matched by _TITLE_WORD_RE_1)
+        self.assertEqual(build._parse_heading_title(["Dosage", "A"]), "Dosage")
+
+    def test_edge_cases(self):
+        """Test edge cases like trailing connectors and empty results."""
+        # Trailing connectors should be popped
+        self.assertEqual(build._parse_heading_title(["Dosage", "and"]), "Dosage")
+        self.assertEqual(build._parse_heading_title(["Dosage", "and", "of"]), "Dosage")
+
+        # Empty result
+        self.assertIsNone(build._parse_heading_title(["123"]))
+        self.assertIsNone(build._parse_heading_title(["lowercase"]))
+        self.assertIsNone(build._parse_heading_title([]))
+
+
 if __name__ == "__main__":
     unittest.main()
