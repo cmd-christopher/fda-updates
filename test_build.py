@@ -325,5 +325,47 @@ class TestVerifyAssets(unittest.TestCase):
         mock_stderr.write.assert_called()
 
 
+
+class TestSplitLongParagraphs(unittest.TestCase):
+    """Test the _split_long_paragraphs() function in build.py."""
+
+    def test_short_text_no_colon(self):
+        """Test that short text without a colon is wrapped in a single <p> tag."""
+        text = "This is a short paragraph."
+        expected = "<p>This is a short paragraph.</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=100), expected)
+
+    def test_short_text_with_colon(self):
+        """Test that short text with a colon correctly splits into multiple <p> tags."""
+        text = "Warning: This is important information."
+        expected = "<p>Warning:</p>\n<p>This is important information.</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=100), expected)
+
+    def test_long_text_natural_split(self):
+        """Test splitting long text at sentence boundaries."""
+        text = "First sentence. Second sentence. Third sentence."
+        # max_chars=20 means "First sentence." (15) fits, " Second sentence." makes it > 20
+        expected = "<p>First sentence.</p>\n<p>Second sentence.</p>\n<p>Third sentence.</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=20), expected)
+
+    def test_long_sentence_without_spaces(self):
+        """Test forceful splitting of a long word without spaces."""
+        text = "Supercalifragilisticexpialidocious"
+        expected = "<p>Supercalif</p>\n<p>ragilistic</p>\n<p>expialidoc</p>\n<p>ious</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=10), expected)
+
+    def test_long_sentence_with_spaces(self):
+        """Test forceful splitting of a long sentence with spaces."""
+        text = "This is a sentence that is very long"
+        expected = "<p>This is a</p>\n<p>sentence</p>\n<p>that is</p>\n<p>very long</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=10), expected)
+
+    def test_mixed_lengths(self):
+        """Test a mix of short sentences and a very long sentence."""
+        text = "Short. This is a very long sentence that exceeds the limit by itself. Short again."
+        expected = "<p>Short.</p>\n<p>This is a very long sentence</p>\n<p>that exceeds the limit by</p>\n<p>itself. Short again.</p>"
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=30), expected)
+
+
 if __name__ == "__main__":
     unittest.main()
