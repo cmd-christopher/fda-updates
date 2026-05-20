@@ -357,10 +357,12 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
             continue
 
         products = entry.get("products", [])
-        is_prescription = any(
-            p.get("marketing_status") == "Prescription" or p.get("marketing_status") == "1"
-            for p in products
-        )
+        is_prescription = False
+        for p in products:
+            if p.get("marketing_status") in ("Prescription", "1"):
+                is_prescription = True
+                break
+
         if not is_prescription:
             continue
 
@@ -429,10 +431,12 @@ def fetch_suppl_approvals(date_from, date_to, limit=100):
             continue
 
         products = entry.get("products", [])
-        is_prescription = any(
-            p.get("marketing_status") == "Prescription" or p.get("marketing_status") == "1"
-            for p in products
-        )
+        is_prescription = False
+        for p in products:
+            if p.get("marketing_status") in ("Prescription", "1"):
+                is_prescription = True
+                break
+
         if not is_prescription:
             continue
 
