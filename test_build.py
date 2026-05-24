@@ -178,6 +178,32 @@ class TestComputeLastUpdated(unittest.TestCase):
         expected_date = datetime.fromtimestamp(test_timestamp).strftime("%B %d, %Y")
         self.assertEqual(result, expected_date)
 
+    @patch('build.datetime')
+    def test_real_invalid_date_format(self, mock_datetime):
+        """Test with an actual invalid date_to format that naturally raises ValueError."""
+        # Unmock strptime so it actually parses and raises ValueError natively
+        mock_datetime.strptime = datetime.strptime
+
+        fixed_now = datetime(2024, 1, 5)
+        mock_datetime.now.return_value = fixed_now
+
+        data = {"query": {"date_to": "2023-13-40"}}
+        result = build.compute_last_updated(data)
+        self.assertEqual(result, "January 05, 2024")
+
+    @patch('build.datetime')
+    def test_real_invalid_date_type(self, mock_datetime):
+        """Test with an actual invalid date_to type that naturally raises TypeError."""
+        # Unmock strptime so it naturally raises TypeError
+        mock_datetime.strptime = datetime.strptime
+
+        fixed_now = datetime(2024, 1, 5)
+        mock_datetime.now.return_value = fixed_now
+
+        data = {"query": {"date_to": [123]}}
+        result = build.compute_last_updated(data)
+        self.assertEqual(result, "January 05, 2024")
+
 class TestStyleXrefsInBody(unittest.TestCase):
     """Test the _style_xrefs_in_body() function in build.py."""
 
