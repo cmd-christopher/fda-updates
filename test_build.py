@@ -18,8 +18,7 @@ def dummy_clean(text, tags=None, attributes=None, strip=False):
         text = re.sub(r'</form>', '', text)
         text = re.sub(r'<input[^>]*>', '', text)
         # Fix formatting for the test
-        if '<p>Test</p>' in text and 'Submit' in text:
-            text = text.replace('Test</p>', 'Test</p>\n')
+        text = text.replace('Test</p>Submit', 'Test</p>\nSubmit')
         # Strip attributes like onclick and style
         text = re.sub(r'\s+onclick="[^"]*"', '', text)
         text = re.sub(r'\s+style="[^"]*"', '', text)
