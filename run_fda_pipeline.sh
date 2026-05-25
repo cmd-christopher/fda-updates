@@ -23,7 +23,16 @@ DATE_FROM="$(date -d '2 years ago' +%Y-%m-%d)"
 DATE_TO="$(date +%Y-%m-%d)"
 OUTPUT_FILE="${DATA_DIR}/approvals.json"
 PROJECT_DIR="${SCRIPT_DIR}"
+VENV_DIR="${SCRIPT_DIR}/.venv"
+REQUIREMENTS_FILE="${SCRIPT_DIR}/requirements.txt"
+REQUIREMENTS_STAMP="${VENV_DIR}/.requirements.sha256"
+PYTHON_BIN="${VENV_DIR}/bin/python"
+DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-${HOME}/.ssh/id_medupdates_synology}"
 PIPELINE_STEP="none"
+
+if [[ -f "$DEPLOY_SSH_KEY" ]]; then
+  export GIT_SSH_COMMAND="ssh -i ${DEPLOY_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
 
 # ─── Helper: Send Pushover notification on failure ──────────────────
 # Per D-07: Pushover app key and user key from .env file
@@ -44,6 +53,45 @@ form="user=${PUSHOVER_USER_KEY}"
 EOF
 }
 
+# ─── Step 0: Ensure Python runtime ─────────────────────────────────
+echo "[0/3] Checking Python runtime"
+PIPELINE_STEP="setup"
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "[0/3] Creating virtual environment at ${VENV_DIR}"
+  if ! python3 -m venv "$VENV_DIR" 2>&1; then
+    echo "[0/3] FAILED: could not create Python virtual environment" >&2
+    send_failure_notification "setup" "could not create Python virtual environment"
+    exit 1
+  fi
+fi
+
+if [[ ! -f "$REQUIREMENTS_FILE" ]]; then
+  echo "[0/3] FAILED: requirements file ${REQUIREMENTS_FILE} not found" >&2
+  send_failure_notification "setup" "requirements.txt not found"
+  exit 1
+fi
+
+CURRENT_REQUIREMENTS_HASH="$(sha256sum "$REQUIREMENTS_FILE" | awk '{print $1}')"
+INSTALLED_REQUIREMENTS_HASH="$(cat "$REQUIREMENTS_STAMP" 2>/dev/null || true)"
+
+if [[ "$CURRENT_REQUIREMENTS_HASH" != "$INSTALLED_REQUIREMENTS_HASH" ]]; then
+  echo "[0/3] Installing Python dependencies"
+  if ! "$PYTHON_BIN" -m pip install --upgrade pip 2>&1; then
+    echo "[0/3] FAILED: pip upgrade failed" >&2
+    send_failure_notification "setup" "pip upgrade failed"
+    exit 1
+  fi
+  if ! "$PYTHON_BIN" -m pip install -r "$REQUIREMENTS_FILE" 2>&1; then
+    echo "[0/3] FAILED: dependency installation failed" >&2
+    send_failure_notification "setup" "dependency installation failed"
+    exit 1
+  fi
+  echo "$CURRENT_REQUIREMENTS_HASH" > "$REQUIREMENTS_STAMP"
+fi
+
+echo "[0/3] Python runtime ready"
+
 # ─── Step 1: Fetch data from openFDA ────────────────────────────────
 echo "[1/3] Fetching FDA drug approval data (${DATE_FROM} to ${DATE_TO})"
 PIPELINE_STEP="fetch"
@@ -51,7 +99,7 @@ PIPELINE_STEP="fetch"
 # Per D-02/D-03: Use --cache for incremental label fetching
 # Per D-01: Full 2-year window always
 # --summarize: use LLM to generate concise condition names for the indication column
-if ! python3 "${SCRIPT_DIR}/fda_approvals.py" \
+if ! "$PYTHON_BIN" "${SCRIPT_DIR}/fda_approvals.py" \
   --from "$DATE_FROM" \
   --to "$DATE_TO" \
   --cache \
@@ -74,7 +122,7 @@ echo "[1/3] Fetch complete"
 echo "[2/3] Building static site"
 PIPELINE_STEP="build"
 
-if ! python3 "${SCRIPT_DIR}/build.py" 2>&1; then
+if ! "$PYTHON_BIN" "${SCRIPT_DIR}/build.py" 2>&1; then
   echo "[2/3] FAILED: build.py exited with error" >&2
   send_failure_notification "build" "build.py exited with non-zero status"
   exit 1
@@ -99,7 +147,7 @@ fi
 
 # Per D-10: Commit message with date and drug count delta
 # Count drugs in new data for commit message
-NEW_COUNT="$(python3 -c "import sys, json; print(json.load(open(sys.argv[1]))['count'])" "$OUTPUT_FILE" 2>/dev/null || echo "unknown")"
+NEW_COUNT="$("$PYTHON_BIN" -c "import sys, json; print(json.load(open(sys.argv[1]))['count'])" "$OUTPUT_FILE" 2>/dev/null || echo "unknown")"
 
 # Try to get previous count from the last commit message for delta
 PREV_COUNT=""

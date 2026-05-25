@@ -14,6 +14,7 @@ build/
 
 # Virtual environments
 venv/
+.venv/
 .env/
 .env
 
@@ -37,5 +38,6 @@ site/
 !.planning/*.json
 
 # Label cache (derived data, not version-controlled)
-data/.label_cache.jsondata/.indication_summaries.json
+data/.label_cache.json
+data/.indication_summaries.json
 .coverage

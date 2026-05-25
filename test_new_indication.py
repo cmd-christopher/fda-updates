@@ -83,7 +83,33 @@ class TestSupplementPreview(unittest.TestCase):
 
         result = fda_approvals._process_drug_label((1, drug, 1, False, {}))
 
-        self.assertEqual(result["indication_preview"], "Efficacy")
+        self.assertEqual(result["indication_preview"], "old disease")
+
+    @patch("fda_approvals.time.sleep")
+    @patch("fda_approvals.urlopen", side_effect=Exception("mocked"))
+    def test_non_condition_summary_cache_is_reprocessed(self, mock_urlopen, mock_sleep):
+        drugs = [
+            {
+                "brand_name": "DRUG",
+                "application_number": "NDA123456",
+                "submission_type": "SUPPL",
+                "submission_number": "1",
+                "approval_date": "2026-01-01",
+                "submission_class": "Efficacy",
+                "label": {
+                    "indications_and_usage": ["DRUG is indicated for the treatment of acute leukemia."]
+                },
+            }
+        ]
+        cache = {"NDA123456:SUPPL:1:2026-01-01": "Efficacy"}
+
+        fda_approvals.summarize_indications_batch(drugs, "", cache)
+
+        self.assertNotEqual(drugs[0].get("indication_summary"), "Efficacy")
+
+    def test_efficacy_phrases_are_not_conditions(self):
+        self.assertTrue(fda_approvals.is_non_condition_indication("Efficacy Update"))
+        self.assertTrue(fda_approvals.is_non_condition_indication("Safety Efficacy Data"))
 
 
 if __name__ == "__main__":

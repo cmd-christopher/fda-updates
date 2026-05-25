@@ -6,7 +6,7 @@ A CLI tool and static site pipeline that fetches FDA prescription drug approval 
 
 ## Installation
 
-This project requires Python 3 with no external packages for core data fetching (uses only stdlib). Site building requires Jinja2 and MarkupSafe.
+This project requires Python 3. Core data fetching uses only the standard library; site building uses the packages in `requirements.txt`.
 
 ```bash
 # Clone the repository
@@ -14,7 +14,7 @@ git clone https://github.com/cmd-christopher/fda-updates.git
 cd fda-updates
 
 # Install site-building dependencies (required for build.py)
-pip install jinja2 markupsafe
+python3 -m pip install -r requirements.txt
 ```
 
 ## Quick Start
@@ -61,7 +61,7 @@ python3 fda_approvals.py --from 2025-04-24 --to 2026-04-22 --type all --cache --
 
 The project includes a fully automated weekly pipeline:
 
-- `run_fda_pipeline.sh` — Runs the full fetch → build → deploy pipeline with fail-safe behavior (old site stays live on failure) and Pushover notifications on errors.
+- `run_fda_pipeline.sh` — Runs the full fetch → build → deploy pipeline with fail-safe behavior (old site stays live on failure), a project-local `.venv` for Python dependencies, and Pushover notifications on errors.
 - `systemd/` — Contains a systemd timer (`Mon *-*-* 03:00:00 America/New_York`) and service unit for running the pipeline weekly via systemd.
 
 ## License

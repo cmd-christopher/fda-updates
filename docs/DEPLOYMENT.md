@@ -65,8 +65,9 @@ Pushover variables are optional — if absent, notifications are silently skippe
 **SSH access** to the Synology NAS must be configured for the `synology-fda` git remote (key-based auth to `ssh://wilms@192.168.1.11:2022`). <!-- VERIFY: SSH connection details -->
 
 **System prerequisites on the deployment machine:**
-- Python 3 with `jinja2` and `markupsafe` packages
+- Python 3 with `venv` and `pip`; `run_fda_pipeline.sh` creates `.venv` and installs `requirements.txt`
 - `git` (with access to both the main repo and the Synology remote)
+- SSH deploy key at `~/.ssh/id_medupdates_synology`, or set `DEPLOY_SSH_KEY` to a different key path
 - `curl` (for Pushover notifications)
 - Network access to `api.fda.gov` and the LLM API endpoint
 

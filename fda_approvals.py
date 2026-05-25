@@ -56,6 +56,7 @@ LLM_MODEL = "cogito-2.1:671b"
 LLM_BATCH_SIZE = 10
 
 EFFICACY_SUPPL_CODES = {"EFFICACY"}
+NON_CONDITION_INDICATIONS = {"efficacy", "orig", "suppl", "original approval", "supplement"}
 
 
 def approval_event_key(drug):
@@ -74,6 +75,44 @@ def approval_event_key(drug):
 def indication_cache_key(drug):
     """Return a cache key for indication summaries."""
     return approval_event_key(drug)
+
+
+def is_non_condition_indication(value):
+    """Return True when a display indication is metadata, not a condition."""
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().lower()
+    return normalized in NON_CONDITION_INDICATIONS or "efficacy" in normalized
+
+
+def label_indications_text(label):
+    """Return the label's indications text as a single string."""
+    if not label or not label.get("indications_and_usage"):
+        return ""
+    raw = label["indications_and_usage"]
+    return " ".join(raw) if isinstance(raw, list) else raw
+
+
+def indication_source_text(drug):
+    """Return the best available source text for the indication column."""
+    label = drug.get("label") or {}
+    if drug.get("new_indication_text"):
+        return drug["new_indication_text"]
+
+    indications = label_indications_text(label)
+    if drug.get("submission_type") == "SUPPL":
+        recent = label.get("recent_major_changes") or []
+        recent_text = " ".join(recent) if isinstance(recent, list) else str(recent)
+        clinical = label.get("clinical_studies") or []
+        clinical_text = " ".join(clinical) if isinstance(clinical, list) else str(clinical)
+        parts = [
+            f"Recent Major Changes: {recent_text}" if recent_text else "",
+            f"Indications and Usage: {indications}" if indications else "",
+            f"Clinical Studies: {clinical_text[:2000]}" if clinical_text else "",
+        ]
+        return "\n".join(part for part in parts if part)
+
+    return indications or drug.get("submission_class", "") or drug.get("submission_type", "")
 
 
 def fetch_json(url):
@@ -292,20 +331,10 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
     to_process = []
     for drug in drugs:
         cache_key = indication_cache_key(drug)
-        if cache_key and cache_key in summaries_cache:
+        if cache_key and cache_key in summaries_cache and not is_non_condition_indication(summaries_cache[cache_key]):
             drug["indication_summary"] = summaries_cache[cache_key]
         else:
-            label = drug.get("label") or {}
-            ind_text = ""
-            if drug.get("new_indication_text"):
-                ind_text = drug["new_indication_text"]
-            elif drug.get("submission_type") == "SUPPL":
-                ind_text = drug.get("submission_class", "") or drug.get("submission_type", "")
-            elif label and label.get("indications_and_usage"):
-                raw = label["indications_and_usage"]
-                ind_text = raw[0] if isinstance(raw, list) else raw
-            if not ind_text:
-                ind_text = drug.get("submission_class", "") or drug.get("submission_type", "")
+            ind_text = indication_source_text(drug)
             if ind_text:
                 to_process.append((cache_key, drug.get("brand_name", "") or drug.get("generic_name", ""), ind_text, drug.get("submission_type") == "SUPPL"))
 
@@ -351,7 +380,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                     parts = line.split("|", 1)
                     cache_key = parts[0].strip()
                     condition = parts[1].strip().strip('"').strip("'")
-                    if cache_key and condition:
+                    if cache_key and condition and not is_non_condition_indication(condition):
                         summaries_cache[cache_key] = condition
                         for drug in drugs_by_cache_key.get(cache_key, []):
                             drug["indication_summary"] = condition
@@ -360,6 +389,8 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
             print(f"  Warning: LLM summarization batch failed: {e}", file=sys.stderr)
             for cache_key, brand, text, is_supplement in batch:
                 fallback = extract_short_indication(text, brand_name=brand) if is_supplement else brand
+                if is_non_condition_indication(fallback):
+                    fallback = ""
                 summaries_cache[cache_key] = fallback
                 for drug in drugs_by_cache_key.get(cache_key, []):
                     drug["indication_summary"] = fallback
@@ -732,15 +763,13 @@ def _process_drug_label(drug_info):
             drug["new_indication_text"] = cached_event["new_indication_text"]
         elif drug.get("submission_type") == "SUPPL":
             drug["new_indication_text"] = fetch_new_indication_text(drug)
-        indication_source = drug.get("new_indication_text", "")
-        if not indication_source and drug.get("submission_type") != "SUPPL":
-            indication_source = (
-                drug["label"].get("indications_and_usage", [""])[0] if isinstance(drug["label"].get("indications_and_usage"), list) else drug["label"].get("indications_and_usage", "")
-            )
+        indication_source = indication_source_text(drug)
         drug["indication_preview"] = extract_short_indication(
             indication_source,
             brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
-        ) or drug.get("submission_class", "") or drug.get("submission_type", "")
+        )
+        if is_non_condition_indication(drug["indication_preview"]):
+            drug["indication_preview"] = ""
         print(f"  [{i}/{total}] {name} (cached)", file=sys.stderr)
     else:
         print(f"  [{i}/{total}] {name}...", file=sys.stderr)
@@ -749,20 +778,20 @@ def _process_drug_label(drug_info):
         if drug.get("submission_type") == "SUPPL":
             drug["new_indication_text"] = fetch_new_indication_text(drug)
         if label:
-            indication_source = drug.get("new_indication_text", "")
-            if not indication_source and drug.get("submission_type") != "SUPPL":
-                indication_source = (
-                    label.get("indications_and_usage", [""])[0] if isinstance(label.get("indications_and_usage"), list) else label.get("indications_and_usage", "")
-                )
+            indication_source = indication_source_text(drug)
             drug["indication_preview"] = extract_short_indication(
                 indication_source,
                 brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
-            ) or drug.get("submission_class", "") or drug.get("submission_type", "")
+            )
+            if is_non_condition_indication(drug["indication_preview"]):
+                drug["indication_preview"] = ""
         else:
             drug["indication_preview"] = extract_short_indication(
                 drug.get("new_indication_text", ""),
                 brand_name=drug.get("brand_name") or drug.get("generic_name", ""),
-            ) or drug.get("submission_class", "") or drug.get("submission_type", "")
+            )
+            if is_non_condition_indication(drug["indication_preview"]):
+                drug["indication_preview"] = ""
     return drug
 
 

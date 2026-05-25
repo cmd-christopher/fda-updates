@@ -5,7 +5,7 @@
 ## Prerequisites
 
 - **Python 3** — The core fetching script (`fda_approvals.py`) uses only Python standard library modules (no external packages required for data fetching). Python 3.10+ is recommended for full `match` syntax support; Python 3.6+ works for the basic CLI.
-- **pip** — For installing site-building dependencies (Jinja2, MarkupSafe).
+- **pip** — For installing site-building dependencies from `requirements.txt`.
 - **Git** — Required for cloning the repository and deploying the static site.
 - **Internet access** — The script queries the openFDA API (`https://api.fda.gov`).
 
@@ -21,7 +21,7 @@
 2. Install site-building dependencies:
 
    ```bash
-   pip install jinja2 markupsafe
+   python3 -m pip install -r requirements.txt
    ```
 
 3. Create the data directory (used for output and label caching):
@@ -50,7 +50,7 @@ python3 fda_approvals.py --from 2026-01-01 --to 2026-04-22 --type nme -o data/ap
 
 - **No results returned** — The openFDA API may return an empty `results` array if there are no approvals in the requested date range, or if the date range is too far in the past/future. Try adjusting the `--from` and `--to` dates to a known active period.
 
-- **`jinja2` not found when running `build.py`** — The site builder (`build.py`) requires Jinja2 and MarkupSafe. Install them with `pip install jinja2 markupsafe`. The core fetch script (`fda_approvals.py`) does not require these packages.
+- **`jinja2` or `bleach` not found when running `build.py`** — The site builder (`build.py`) requires the packages in `requirements.txt`. Install them with `python3 -m pip install -r requirements.txt`. The automated pipeline bootstraps these into `.venv` automatically.
 
 - **API rate limiting** — The openFDA API has a default rate limit of 240 requests per minute per IP with no API key. The script includes a 0.5-second delay between label requests to stay within limits. If you encounter `403` errors, wait a minute and retry.
 
