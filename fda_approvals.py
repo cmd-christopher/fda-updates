@@ -329,13 +329,15 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
             drugs_by_cache_key[cache_key].append(drug)
 
     to_process = []
+    seen_keys = set()
     for drug in drugs:
         cache_key = indication_cache_key(drug)
         if cache_key and cache_key in summaries_cache and not is_non_condition_indication(summaries_cache[cache_key]):
             drug["indication_summary"] = summaries_cache[cache_key]
         else:
             ind_text = indication_source_text(drug)
-            if ind_text:
+            if ind_text and cache_key not in seen_keys:
+                seen_keys.add(cache_key)
                 to_process.append((cache_key, drug.get("brand_name", "") or drug.get("generic_name", ""), ind_text, drug.get("submission_type") == "SUPPL"))
 
     if not to_process:
@@ -374,6 +376,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                 result = json.loads(resp.read().decode())
                 content = result["choices"][0]["message"]["content"].strip()
 
+            seen_in_response = set()
             for line in content.strip().split("\n"):
                 line = line.strip()
                 if "|" in line:
@@ -382,18 +385,23 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                     condition = parts[1].strip().strip('"').strip("'")
                     if cache_key and condition and not is_non_condition_indication(condition):
                         summaries_cache[cache_key] = condition
-                        for drug in drugs_by_cache_key.get(cache_key, []):
-                            drug["indication_summary"] = condition
+                        if cache_key not in seen_in_response:
+                            seen_in_response.add(cache_key)
+                            for drug in drugs_by_cache_key.get(cache_key, []):
+                                drug["indication_summary"] = condition
 
         except Exception as e:
             print(f"  Warning: LLM summarization batch failed: {e}", file=sys.stderr)
+            seen_in_fallback = set()
             for cache_key, brand, text, is_supplement in batch:
                 fallback = extract_short_indication(text, brand_name=brand) if is_supplement else brand
                 if is_non_condition_indication(fallback):
                     fallback = ""
                 summaries_cache[cache_key] = fallback
-                for drug in drugs_by_cache_key.get(cache_key, []):
-                    drug["indication_summary"] = fallback
+                if cache_key not in seen_in_fallback:
+                    seen_in_fallback.add(cache_key)
+                    for drug in drugs_by_cache_key.get(cache_key, []):
+                        drug["indication_summary"] = fallback
 
         time.sleep(0.5)
 
