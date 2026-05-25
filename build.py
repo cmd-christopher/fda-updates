@@ -10,6 +10,10 @@ import bleach
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
+_SCRIPT_RE = re.compile(r"<script[^>]*>.*?</script>", flags=re.DOTALL | re.IGNORECASE)
+_STYLE_RE = re.compile(r"<style[^>]*>.*?</style>", flags=re.DOTALL | re.IGNORECASE)
+_IFRAME_RE = re.compile(r"<iframe[^>]*>.*?</iframe>", flags=re.DOTALL | re.IGNORECASE)
+
 
 def sanitize_html(text):
     """Strip dangerous HTML content, preserve safe structural tags.
@@ -27,9 +31,9 @@ def sanitize_html(text):
 
     # Strip <script>, <style>, <iframe> tags and their content first
     # This prevents bleach from leaving raw JS/CSS text behind on the page
-    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"<iframe[^>]*>.*?</iframe>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = _SCRIPT_RE.sub("", text)
+    text = _STYLE_RE.sub("", text)
+    text = _IFRAME_RE.sub("", text)
 
     allowed_tags = [
         "table", "p", "br", "ul", "ol", "li", "b", "i", "strong",
