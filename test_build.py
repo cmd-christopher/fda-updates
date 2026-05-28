@@ -447,6 +447,69 @@ class TestParseHeadingTitle(unittest.TestCase):
         self.assertIsNone(build._parse_heading_title(["lowercase"]))
         self.assertIsNone(build._parse_heading_title([]))
 
+class TestResolveSlugCollisions(unittest.TestCase):
+    """Test the resolve_slug_collisions() function in build.py."""
 
+    def test_no_collision(self):
+        """Test with drugs that have distinct slugs."""
+        drugs = [
+            {"slug": "drug-a"},
+            {"slug": "drug-b"},
+            {"slug": "drug-c"}
+        ]
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-a")
+        self.assertEqual(drugs[1]["slug"], "drug-b")
+        self.assertEqual(drugs[2]["slug"], "drug-c")
+
+    def test_collision_resolved_with_app_number(self):
+        """Test resolving collision by appending application number digits."""
+        drugs = [
+            {"slug": "drug-a", "application_number": "NDA 123"},
+            {"slug": "drug-a", "application_number": "NDA 456"}
+        ]
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-a")
+        self.assertEqual(drugs[1]["slug"], "drug-a-456")
+
+    def test_collision_resolved_with_count_no_app_number(self):
+        """Test resolving collision using count when application number is missing or has no digits."""
+        drugs = [
+            {"slug": "drug-b"},
+            {"slug": "drug-b"},
+            {"slug": "drug-b", "application_number": "N/A"}
+        ]
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-b")
+        self.assertEqual(drugs[1]["slug"], "drug-b-1")
+        self.assertEqual(drugs[2]["slug"], "drug-b-1-1")
+
+    def test_collision_resolved_with_date(self):
+        """Test resolving collision using approval date when application number doesn't break the tie."""
+        drugs = [
+            {"slug": "drug-c", "application_number": "123", "approval_date": "2023-01-01"},
+            {"slug": "drug-c", "application_number": "123", "approval_date": "2023-02-01"},
+            {"slug": "drug-c", "application_number": "123", "approval_date": "2023-03-01"}
+        ]
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-c")
+        self.assertEqual(drugs[1]["slug"], "drug-c-123")
+        self.assertEqual(drugs[2]["slug"], "drug-c-123-20230301")
+
+    def test_collision_fully_fallback_counts(self):
+        """Test falling back to multiple counts when both app number and date fail to break the tie, or when date is missing."""
+        drugs = [
+            {"slug": "drug-d", "application_number": "123"},
+            {"slug": "drug-d", "application_number": "123"},
+            {"slug": "drug-d", "application_number": "123"}
+        ]
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-d")
+        self.assertEqual(drugs[1]["slug"], "drug-d-123")
+        self.assertEqual(drugs[2]["slug"], "drug-d-123-1")
+        build.resolve_slug_collisions(drugs)
+        self.assertEqual(drugs[0]["slug"], "drug-d")
+        self.assertEqual(drugs[1]["slug"], "drug-d-123")
+        self.assertEqual(drugs[2]["slug"], "drug-d-123-1")
 if __name__ == "__main__":
     unittest.main()
