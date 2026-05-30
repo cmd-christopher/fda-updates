@@ -58,6 +58,10 @@ def sanitize_html(text):
     return Markup(cleaned_text)
 
 
+_SPLIT_COLON_RE = re.compile(r"(?<=[a-z])\.\s+(?=[A-Z])|(?<=:)\s+(?=[A-Z])")
+_SPLIT_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])|(?<=:)\s+(?=[A-Z])")
+
+
 def _split_long_paragraphs(text, max_chars=800):
     """Split text into multiple <p> blocks if it exceeds max_chars.
     Also splits at colons if they appear to separate logical blocks.
@@ -65,13 +69,13 @@ def _split_long_paragraphs(text, max_chars=800):
     if len(text) <= max_chars:
         # Still try to split at colons if they look like headings
         if ":" in text:
-            parts = re.split(r"(?<=[a-z])\.\s+(?=[A-Z])|(?<=:)\s+(?=[A-Z])", text)
+            parts = _SPLIT_COLON_RE.split(text)
             if len(parts) > 1:
                 return "\n".join(f"<p>{p.strip()}</p>" for p in parts if p.strip())
         return f"<p>{text}</p>"
 
     # Split at sentence boundaries or colons
-    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])|(?<=:)\s+(?=[A-Z])", text)
+    sentences = _SPLIT_SENTENCE_RE.split(text)
     chunks = []
     current = []
     current_len = 0
