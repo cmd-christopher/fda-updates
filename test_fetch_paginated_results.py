@@ -80,12 +80,7 @@ class TestFetchPaginatedResults(unittest.TestCase):
 
     @patch("fda_approvals.fetch_json")
     def test_missing_meta(self, mock_fetch_json):
-        """Test behavior when API response is missing meta information.
-
-        When the meta total count is not present, safe_get returns 0.
-        The condition len(all_results) >= 0 will evaluate to True, causing the
-        pagination loop to break immediately after the first iteration.
-        """
+        """When meta is missing, keep paging until a short page is returned."""
         mock_fetch_json.side_effect = [
             {
                 "results": [{"id": 1}, {"id": 2}]
@@ -97,9 +92,9 @@ class TestFetchPaginatedResults(unittest.TestCase):
 
         results = _fetch_paginated_results("http://example.com?query=1", limit=2)
 
-        # It actually breaks after first iteration because safe_get returns 0.
-        self.assertEqual(len(results), 2)
-        self.assertEqual(mock_fetch_json.call_count, 1)
+        self.assertEqual(len(results), 3)
+        self.assertEqual(mock_fetch_json.call_count, 2)
+        mock_fetch_json.assert_any_call("http://example.com?query=1&skip=2")
 
 if __name__ == '__main__':
     unittest.main()

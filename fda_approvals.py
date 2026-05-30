@@ -24,11 +24,15 @@ import time
 import unicodedata
 from datetime import datetime
 from urllib.request import urlopen, Request
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
+HTTP_TIMEOUT = 30
+HTTP_MAX_RETRIES = 3
+HTTP_RETRY_BACKOFF = 1.0
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 LABEL_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".label_cache.json")
 
 class RateLimiter:
@@ -116,10 +120,35 @@ def indication_source_text(drug):
     return indications or drug.get("submission_class", "") or drug.get("submission_type", "")
 
 
-def fetch_json(url):
-    req = Request(url, headers={"User-Agent": "fda-approvals-script/1.0"})
-    with urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
+def _retry_delay(attempt, error, base_delay=HTTP_RETRY_BACKOFF):
+    """Return the delay before retrying an HTTP request."""
+    if isinstance(error, HTTPError) and error.code == 429:
+        retry_after = error.headers.get("Retry-After") if error.headers else None
+        if retry_after:
+            try:
+                return max(0, float(retry_after))
+            except ValueError:
+                pass
+    return base_delay * (2 ** attempt)
+
+
+def fetch_json(url, max_retries=HTTP_MAX_RETRIES):
+    for attempt in range(max_retries):
+        req = Request(url, headers={"User-Agent": "fda-approvals-script/1.0"})
+        try:
+            with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+                return json.loads(resp.read().decode())
+        except HTTPError as e:
+            should_retry = e.code in RETRYABLE_HTTP_CODES
+            if not should_retry or attempt == max_retries - 1:
+                raise
+            time.sleep(_retry_delay(attempt, e))
+        except (URLError, TimeoutError) as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(_retry_delay(attempt, e))
+
+    raise RuntimeError("unreachable retry state")
 
 
 def safe_get(data, keys, default=None):
@@ -141,7 +170,8 @@ def _fetch_paginated_results(base_url, limit):
         data = fetch_json(page_url)
         results = data.get("results", [])
         all_results.extend(results)
-        if len(results) < limit or len(all_results) >= safe_get(data, ["meta", "results", "total"], 0):
+        total = safe_get(data, ["meta", "results", "total"], None)
+        if len(results) < limit or (total is not None and len(all_results) >= total):
             break
         skip += limit
     return all_results
@@ -344,11 +374,33 @@ def load_indication_summaries(path=INDICATION_SUMMARIES_PATH):
         return {}
 
 
+def write_text_atomic(path, text):
+    """Write text to path by replacing the file only after the write succeeds."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=directory, delete=False) as f:
+            tmp_path = f.name
+            f.write(text)
+        os.replace(tmp_path, path)
+    except Exception:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        raise
+
+
+def write_json_atomic(path, data, **dump_kwargs):
+    """Write JSON to path atomically."""
+    write_text_atomic(path, json.dumps(data, **dump_kwargs))
+
+
 def save_indication_summaries(summaries, path=INDICATION_SUMMARIES_PATH):
     """Save LLM-summarized indications to cache."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(summaries, f, indent=2, sort_keys=True)
+    write_json_atomic(path, summaries, indent=2, sort_keys=True)
 
 
 def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_BATCH_SIZE):
@@ -755,6 +807,10 @@ def fetch_label(drug):
         name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
         print(f"  Warning: HTTP {e.code} fetching label for {name}", file=sys.stderr)
         return None
+    except (URLError, TimeoutError, json.JSONDecodeError) as e:
+        name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
+        print(f"  Warning: error fetching label for {name}: {e}", file=sys.stderr)
+        return None
 
 
 def load_previous_approvals(path="data/approvals.json"):
@@ -785,9 +841,7 @@ def save_label_cache(drugs, cache_path):
         label = drug.get("label")
         if app_num and label and label.get("set_id"):
             cache[app_num] = label["set_id"]
-    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-    with open(cache_path, "w") as f:
-        json.dump(cache, f, indent=2)
+    write_json_atomic(cache_path, cache, indent=2)
 
 
 def _process_drug_label(drug_info):
@@ -990,8 +1044,7 @@ def write_output(args, drugs):
     json_str = json.dumps(output, indent=2)
 
     if args.output:
-        with open(args.output, "w") as f:
-            f.write(json_str)
+        write_text_atomic(args.output, json_str)
         print(f"Output written to {args.output}", file=sys.stderr)
     else:
         print(json_str)

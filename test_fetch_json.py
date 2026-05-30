@@ -60,14 +60,37 @@ class TestFetchJson(unittest.TestCase):
         with self.assertRaises(HTTPError):
             fda_approvals.fetch_json("https://example.com/api")
 
+        self.assertEqual(mock_urlopen.call_count, 1)
+
+    @patch('fda_approvals.time.sleep')
     @patch('fda_approvals.urlopen')
-    def test_fetch_json_url_error(self, mock_urlopen):
-        """Test fetch_json raises URLError when there is a connection issue."""
+    def test_fetch_json_retries_transient_http_error(self, mock_urlopen, mock_sleep):
+        """Transient HTTP failures should be retried before returning JSON."""
+        err = HTTPError(url='http://example.com/api', code=500, msg='Server Error', hdrs={}, fp=io.BytesIO(b''))
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"status": "ok"}'
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_resp
+        mock_urlopen.side_effect = [err, mock_cm]
+
+        result = fda_approvals.fetch_json("https://example.com/api")
+
+        self.assertEqual(result, {"status": "ok"})
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_called_once()
+
+    @patch('fda_approvals.urlopen')
+    @patch('fda_approvals.time.sleep')
+    def test_fetch_json_url_error(self, mock_sleep, mock_urlopen):
+        """Test fetch_json raises URLError after retrying connection issues."""
         err = URLError("Connection refused")
         mock_urlopen.side_effect = err
 
         with self.assertRaises(URLError):
             fda_approvals.fetch_json("https://example.com/api")
+
+        self.assertEqual(mock_urlopen.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
 
 if __name__ == '__main__':
     unittest.main()

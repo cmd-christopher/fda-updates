@@ -123,5 +123,25 @@ class TestSaveIndicationSummaries(unittest.TestCase):
         finally:
             shutil.rmtree(tmpdir)
 
+    def test_replace_failure_preserves_existing_summaries_file(self):
+        """If atomic replacement fails, the previous summaries file remains intact."""
+        import tempfile
+        import json
+        import os
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"NDAOLD": "Old Disease"}, f)
+            cache_path = f.name
+
+        try:
+            with patch("fda_approvals.os.replace", side_effect=OSError("replace failed")):
+                with self.assertRaises(OSError):
+                    fda_approvals.save_indication_summaries({"NDANEW": "New Disease"}, cache_path)
+
+            with open(cache_path) as cf:
+                self.assertEqual(json.load(cf), {"NDAOLD": "Old Disease"})
+        finally:
+            os.unlink(cache_path)
+
 if __name__ == '__main__':
     unittest.main()

@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 # Import the module under test
 import fda_approvals
@@ -136,6 +137,22 @@ class TestSaveLabelCache(unittest.TestCase):
             import shutil
             shutil.rmtree(tmpdir)
 
+    def test_replace_failure_preserves_existing_cache_file(self):
+        """If atomic replacement fails, the previous cache file remains intact."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"NDAOLD": "uuid-old"}, f)
+            cache_path = f.name
+        try:
+            drugs = [{"application_number": "NDANEW", "label": {"set_id": "uuid-new"}}]
+            with patch("fda_approvals.os.replace", side_effect=OSError("replace failed")):
+                with self.assertRaises(OSError):
+                    fda_approvals.save_label_cache(drugs, cache_path)
+
+            with open(cache_path) as cf:
+                self.assertEqual(json.load(cf), {"NDAOLD": "uuid-old"})
+        finally:
+            os.unlink(cache_path)
+
 
 class TestFetchLabelSetId(unittest.TestCase):
     """Test that fetch_label() includes set_id in returned label dict."""
@@ -168,6 +185,32 @@ class TestCacheCliArg(unittest.TestCase):
                 capture_output=True, text=True
             )
             self.assertIn("--cache", result.stdout)
+
+
+class TestWriteOutput(unittest.TestCase):
+    """Test output JSON writing behavior."""
+
+    def test_replace_failure_preserves_existing_output_file(self):
+        """If atomic replacement fails, the previous output file remains intact."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"count": 99, "drugs": []}, f)
+            output_path = f.name
+
+        class Args:
+            date_from = "2026-01-01"
+            date_to = "2026-01-31"
+            submission_type = "all"
+            output = output_path
+
+        try:
+            with patch("fda_approvals.os.replace", side_effect=OSError("replace failed")):
+                with self.assertRaises(OSError):
+                    fda_approvals.write_output(Args, [{"application_number": "NDANEW"}])
+
+            with open(output_path) as cf:
+                self.assertEqual(json.load(cf), {"count": 99, "drugs": []})
+        finally:
+            os.unlink(output_path)
 
 
 if __name__ == "__main__":
