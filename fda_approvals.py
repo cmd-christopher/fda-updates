@@ -11,6 +11,7 @@ Usage:
 import argparse
 from collections import defaultdict
 import concurrent.futures
+from functools import lru_cache
 import json
 import os
 import re
@@ -156,6 +157,69 @@ def slugify(name):
     return name.strip("-")
 
 
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+INDICATION_USAGE_RE = re.compile(r"^\d+(\.\d+)*\s+INDICATIONS?\s+AND\s+USAGE\s*", re.IGNORECASE)
+LEADING_DIGIT_RE = re.compile(r"^\d+\s+")
+CLEAN_NAME_RE = re.compile(r"\s+(TM|®|℠)", re.IGNORECASE)
+CLEAN_PAREN_DIGITS_RE = re.compile(r"\s*\(\s*\d+(\.\d+)?\s*\)")
+CLEAN_SEE_BRACKETS_RE = re.compile(r"\s*\[\s*see\s+.*?\]", re.IGNORECASE)
+FIRST_COND_SPLIT_RE = re.compile(r"\)\s*\(\s*\d+(?:\.\d+)?\s*\)\s+(?=[A-Z])")
+FIRST_COND_CLEAN_RE = re.compile(r"\s*\(\s*\d+(\.\d+)?\s*\)$")
+
+COLON_LIST_RE = re.compile(
+    r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(?:patients\s+(?:with|who)\s+)?:?\s*(.+?)(?:\.\s+(?:\(\s*\d)|\.\s+[A-Z]|\.$)",
+    re.IGNORECASE | re.DOTALL,
+)
+IND_TREATMENT_RE = re.compile(
+    r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(.+?)(?:\.(?:\s|$))",
+    re.IGNORECASE,
+)
+IND_COLON_RE = re.compile(r"indicated for:\s*(.+?)(?:\.\s+[A-Z]|\.$)", re.IGNORECASE | re.DOTALL)
+IND_REDUCE_RE = re.compile(
+    r"indicated to\s+(?:reduce|increase|improve|treat|manage|prevent|lower|raise|decrease|control|maintain|provide|support)\s+(.+?)(?:\.(?:\s|$))",
+    re.IGNORECASE,
+)
+EXPAND_POP_RE = re.compile(
+    r"to\s+expand\s+.+?\s+to\s+include\s+(.+?)(?:\.(?:\s|$))",
+    re.IGNORECASE,
+)
+USE_PEDS_RE = re.compile(
+    r"Use\s+of\s+\S+\s+in\s+(.+?)(?:\s+is\s+supported|\.(?:\s|$))",
+    re.IGNORECASE,
+)
+PROVIDES_FOR_RE = re.compile(
+    r"provides\s+for\s+.+?\s+for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(.+?)(?:\.(?:\s|$))",
+    re.IGNORECASE,
+)
+IND_ADJUNCT_RE = re.compile(
+    r"indicated\s+(?:as\s+(?:an?\s+)?(?:adjunct|add-on|first-line|second-line|monotherapy|combination|alternative|supplement|replacement|initial|maintenance)\s*(?:therapy|treatment|regimen|agent|option)?\s*(?:to|for|in|with)\s+|in\s+(?:combination\s+with\s+.+?\s+for\s+|adults?\s+(?:and\s+pediatric\s+patients?\s+)?(?:aged?\s+\d+\s+(?:years?\s+)?(?:and\s+older(?:\s+patients?\s+)?)?\s+)?with\s+|patients?\s+(?:aged?\s+\S+\s+)?with\s+|pediatric\s+patients\s+\S+\s+with\s+))(.+?)(?:\.(?:\s|$))",
+    re.IGNORECASE,
+)
+IND_GENERIC_RE = re.compile(r"indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))", re.IGNORECASE)
+FIRST_SENTENCE_RE = re.compile(r"(.+?)\.(?:\s|$)")
+
+@lru_cache(maxsize=128)
+def get_dup_re(clean_name):
+    return re.compile(
+        r"indicated for\s+.+?:\s*(?:" + re.escape(clean_name) + r"\s+is\s+a?\s*|is\s+)?(?:.+?\s+)?indicated for\s+(?:the\s+)?(?:treatment|management|prevention|use)\s+of\s+(?:patients\s+with\s*:\s*)(.+)",
+        re.IGNORECASE,
+    )
+
+@lru_cache(maxsize=128)
+def get_name_in_supported_re(clean_name):
+    return re.compile(
+        re.escape(clean_name) + r"\s+in\s+(.+?)(?:\s+is\s+supported|\.(?:\s|$))",
+        re.IGNORECASE,
+    )
+
+@lru_cache(maxsize=128)
+def get_name_antagonist_re(clean_name):
+    return re.compile(
+        re.escape(clean_name) + r"\s+(?:\([^)]*\)\s+)?(?:injection|tablet|capsule|cream|solution|for\s+injection)?\s*(?:is\s+(?:a\s+|an\s+)?\S+(?:\s+and\s+\S+)?\s+(?:antagonist|inhibitor|agonist|blocker|stimulant|modulator|therapy|treatment|antibody|receptor|product|medicine|drug|combination)\s+)?indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))",
+        re.IGNORECASE,
+    )
+
+
 def extract_short_indication(text, brand_name=""):
     """Extract a concise indication from FDA label text.
 
@@ -169,17 +233,17 @@ def extract_short_indication(text, brand_name=""):
         return ""
     if isinstance(text, list):
         text = " ".join(text)
-    text = re.sub(r"<[^>]+>", "", text)
-    text = re.sub(r"^\d+(\.\d+)*\s+INDICATIONS?\s+AND\s+USAGE\s*", "", text, flags=re.IGNORECASE)
+    text = HTML_TAG_RE.sub("", text)
+    text = INDICATION_USAGE_RE.sub("", text)
     text = text.strip()
     if not text:
         return ""
     if text[0].isdigit() and text[1:2] == " ":
-        text = re.sub(r"^\d+\s+", "", text)
+        text = LEADING_DIGIT_RE.sub("", text)
 
     def _clean(s):
-        s = re.sub(r"\s*\(\s*\d+(\.\d+)?\s*\)", "", s).strip()
-        s = re.sub(r"\s*\[\s*see\s+.*?\]", "", s, flags=re.IGNORECASE).strip()
+        s = CLEAN_PAREN_DIGITS_RE.sub("", s).strip()
+        s = CLEAN_SEE_BRACKETS_RE.sub("", s).strip()
         return s.rstrip(";:,.").strip()
 
     def _first_condition(s):
@@ -192,108 +256,78 @@ def extract_short_indication(text, brand_name=""):
         # Split on section-reference parens: "( 1.X )" or "(1.X)" followed by a capital letter
         # that starts a new condition name. These look like "nAMD) ( 1.1 ) Diabetic"
         # But DON'T split on "(Wet) Age" — parenthetical qualifiers within condition names.
-        parts = re.split(r"\)\s*\(\s*\d+(?:\.\d+)?\s*\)\s+(?=[A-Z])", s, maxsplit=1)
+        parts = FIRST_COND_SPLIT_RE.split(s, maxsplit=1)
         result = parts[0] if parts else s
-        result = re.sub(r"\s*\(\s*\d+(\.\d+)?\s*\)$", "", result).strip()
+        result = FIRST_COND_CLEAN_RE.sub("", result).strip()
         return result.rstrip(";:,.").strip()
 
-    clean_name = re.sub(r"\s+(TM|®|℠)", "", brand_name, flags=re.IGNORECASE) if brand_name else ""
+    clean_name = CLEAN_NAME_RE.sub("", brand_name) if brand_name else ""
 
     # FDA duplicate-sentence: "DRUG is ... indicated for ... : DRUG is ... indicated for ... : Cond1 (1.1) Cond2 (1.2)"
     if clean_name:
-        dup = re.search(
-            r"indicated for\s+.+?:\s*(?:" + re.escape(clean_name) + r"\s+is\s+a?\s*|is\s+)?(?:.+?\s+)?indicated for\s+(?:the\s+)?(?:treatment|management|prevention|use)\s+of\s+(?:patients\s+with\s*:\s*)(.+)",
-            text, re.IGNORECASE,
-        )
+        dup = get_dup_re(clean_name).search(text)
         if dup:
             return _first_condition(_clean(dup.group(1)))[:100]
 
     # "indicated for the treatment/management/etc of: CONDITIONS" (colon list)
-    m = re.search(
-        r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(?:patients\s+(?:with|who)\s+)?:?\s*(.+?)(?:\.\s+(?:\(\s*\d)|\.\s+[A-Z]|\.$)",
-        text, re.IGNORECASE | re.DOTALL,
-    )
+    m = COLON_LIST_RE.search(text)
     if m:
         return _first_condition(_clean(m.group(1)))[:100]
 
     # "indicated for the treatment/etc of CONDITION"
-    m = re.search(
-        r"indicated for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(.+?)(?:\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = IND_TREATMENT_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # "DRUG is indicated for: CONDITION" (colon, no treatment/management keyword)
-    m = re.search(r"indicated for:\s*(.+?)(?:\.\s+[A-Z]|\.$)", text, re.IGNORECASE | re.DOTALL)
+    m = IND_COLON_RE.search(text)
     if m:
         return _first_condition(_clean(m.group(1)))[:100]
 
     # "indicated to reduce/increase/improve/etc CONDITION"
-    m = re.search(
-        r"indicated to\s+(?:reduce|increase|improve|treat|manage|prevent|lower|raise|decrease|control|maintain|provide|support)\s+(.+?)(?:\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = IND_REDUCE_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # Approval-letter wording for efficacy supplements:
     # "To expand the patient population ... to include HIV-1 infected pediatric patients..."
-    m = re.search(
-        r"to\s+expand\s+.+?\s+to\s+include\s+(.+?)(?:\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = EXPAND_POP_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # "Use of DRUG in pediatric patients..." from FDA supplement approval letters.
-    m = re.search(
-        r"Use\s+of\s+\S+\s+in\s+(.+?)(?:\s+is\s+supported|\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = USE_PEDS_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     if clean_name:
-        m = re.search(
-            re.escape(clean_name) + r"\s+in\s+(.+?)(?:\s+is\s+supported|\.(?:\s|$))",
-            text, re.IGNORECASE,
-        )
+        m = get_name_in_supported_re(clean_name).search(text)
         if m:
             return _clean(m.group(1))[:100]
 
     # "provides for ... for the treatment of CONDITION"
-    m = re.search(
-        r"provides\s+for\s+.+?\s+for\s+(?:the\s+)?(?:treatment|management|prevention|reduction|use|prophylaxis)\s+of\s+(.+?)(?:\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = PROVIDES_FOR_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # "indicated in/for/as [adjunct/combination/etc] [with] CONDITION"
-    m = re.search(
-        r"indicated\s+(?:as\s+(?:an?\s+)?(?:adjunct|add-on|first-line|second-line|monotherapy|combination|alternative|supplement|replacement|initial|maintenance)\s*(?:therapy|treatment|regimen|agent|option)?\s*(?:to|for|in|with)\s+|in\s+(?:combination\s+with\s+.+?\s+for\s+|adults?\s+(?:and\s+pediatric\s+patients?\s+)?(?:aged?\s+\d+\s+(?:years?\s+)?(?:and\s+older(?:\s+patients?\s+)?)?\s+)?with\s+|patients?\s+(?:aged?\s+\S+\s+)?with\s+|pediatric\s+patients\s+\S+\s+with\s+))(.+?)(?:\.(?:\s|$))",
-        text, re.IGNORECASE,
-    )
+    m = IND_ADJUNCT_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # "DRUG [is a/an ... antagonist/inhibitor] indicated for/in/to CONDITION"
     if clean_name:
-        m = re.search(
-            re.escape(clean_name) + r"\s+(?:\([^)]*\)\s+)?(?:injection|tablet|capsule|cream|solution|for\s+injection)?\s*(?:is\s+(?:a\s+|an\s+)?\S+(?:\s+and\s+\S+)?\s+(?:antagonist|inhibitor|agonist|blocker|stimulant|modulator|therapy|treatment|antibody|receptor|product|medicine|drug|combination)\s+)?indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))",
-            text, re.IGNORECASE,
-        )
+        m = get_name_antagonist_re(clean_name).search(text)
         if m:
             return _clean(m.group(1))[:100]
 
     # Generic: "indicated for/in/to/as CONDITION"
-    m = re.search(r"indicated\s+(?:for|in|to|as)\s+(.+?)(?:\.(?:\s|$))", text, re.IGNORECASE)
+    m = IND_GENERIC_RE.search(text)
     if m:
         return _clean(m.group(1))[:100]
 
     # Fallback: first sentence
-    m = re.search(r"(.+?)\.(?:\s|$)", text)
+    m = FIRST_SENTENCE_RE.search(text)
     if m:
         return m.group(1).strip()[:100]
     return text[:80].strip()
