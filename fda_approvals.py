@@ -13,6 +13,7 @@ from collections import defaultdict
 import concurrent.futures
 from functools import lru_cache
 import json
+import logging
 import os
 import re
 import shutil
@@ -26,6 +27,8 @@ from datetime import datetime
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.fda.gov/drug/"
 REQUEST_DELAY = 0.5
@@ -141,12 +144,18 @@ def fetch_json(url, max_retries=HTTP_MAX_RETRIES):
         except HTTPError as e:
             should_retry = e.code in RETRYABLE_HTTP_CODES
             if not should_retry or attempt == max_retries - 1:
+                logger.error("fetch_json failed url=%s http_code=%s attempts=%d", url, e.code, attempt + 1)
                 raise
-            time.sleep(_retry_delay(attempt, e))
+            delay = _retry_delay(attempt, e)
+            logger.warning("fetch_json retrying url=%s http_code=%s attempt=%d/%d delay=%.1fs", url, e.code, attempt + 1, max_retries, delay)
+            time.sleep(delay)
         except (URLError, TimeoutError) as e:
             if attempt == max_retries - 1:
+                logger.error("fetch_json failed url=%s error=%s attempts=%d", url, e, attempt + 1)
                 raise
-            time.sleep(_retry_delay(attempt, e))
+            delay = _retry_delay(attempt, e)
+            logger.warning("fetch_json retrying url=%s error=%s attempt=%d/%d delay=%.1fs", url, e, attempt + 1, max_retries, delay)
+            time.sleep(delay)
 
     raise RuntimeError("unreachable retry state")
 
@@ -171,9 +180,11 @@ def _fetch_paginated_results(base_url, limit):
         results = data.get("results", [])
         all_results.extend(results)
         total = safe_get(data, ["meta", "results", "total"], None)
+        logger.debug("fetch_paginated page_url=%s page_results=%d accumulated=%d total=%s", page_url, len(results), len(all_results), total)
         if len(results) < limit or (total is not None and len(all_results) >= total):
             break
         skip += limit
+    logger.info("fetch_paginated complete base_url=%s total_fetched=%d", base_url, len(all_results))
     return all_results
 
 
@@ -366,11 +377,15 @@ def extract_short_indication(text, brand_name=""):
 def load_indication_summaries(path=INDICATION_SUMMARIES_PATH):
     """Load previously LLM-summarized indications from cache."""
     if not os.path.exists(path):
+        logger.debug("load_indication_summaries path=%s not_found", path)
         return {}
     try:
         with open(path) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
+            data = json.load(f)
+        logger.info("load_indication_summaries path=%s entries=%d", path, len(data))
+        return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("load_indication_summaries path=%s error=%s returning_empty", path, e)
         return {}
 
 
@@ -384,7 +399,9 @@ def write_text_atomic(path, text):
             tmp_path = f.name
             f.write(text)
         os.replace(tmp_path, path)
-    except Exception:
+        logger.debug("write_text_atomic path=%s bytes=%d", path, len(text))
+    except Exception as e:
+        logger.error("write_text_atomic failed path=%s error=%s", path, e)
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
@@ -429,6 +446,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
     if not to_process:
         return
 
+    logger.info("summarize_indications_batch to_process=%d batch_size=%d", len(to_process), batch_size)
     print(f"Summarizing {len(to_process)} indications via LLM (batches of {batch_size})...", file=sys.stderr)
 
     for batch_start in range(0, len(to_process), batch_size):
@@ -462,6 +480,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                 result = json.loads(resp.read().decode())
                 content = result["choices"][0]["message"]["content"].strip()
 
+            logger.info("summarize_indications_batch success batch_start=%d batch_size=%d", batch_start, len(batch))
             seen_in_response = set()
             for line in content.strip().split("\n"):
                 line = line.strip()
@@ -477,6 +496,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
                                 drug["indication_summary"] = condition
 
         except Exception as e:
+            logger.warning("summarize_indications_batch failed batch_start=%d batch_size=%d error=%s using_fallback", batch_start, len(batch), e)
             print(f"  Warning: LLM summarization batch failed: {e}", file=sys.stderr)
             seen_in_fallback = set()
             for cache_key, brand, text, is_supplement in batch:
@@ -511,7 +531,9 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
     search = "+AND+".join(search_parts)
     url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
 
+    logger.info("fetch_drugsfda_approvals url=%s date_from=%s date_to=%s submission_type=%s", url, date_from_str, date_to_str, submission_type)
     all_results = _fetch_paginated_results(url, limit)
+    logger.info("fetch_drugsfda_approvals raw_results=%d", len(all_results))
 
     drugs = []
     for entry in all_results:
@@ -585,6 +607,7 @@ def fetch_drugsfda_approvals(date_from, date_to, submission_type=None, limit=100
         drug["slug"] = slugify(drug["brand_name"] or drug["generic_name"] or "")
         drugs.append(drug)
 
+    logger.info("fetch_drugsfda_approvals filtered_drugs=%d", len(drugs))
     return drugs
 
 
@@ -598,7 +621,9 @@ def fetch_suppl_approvals(date_from, date_to, limit=100):
     search = f'submissions.submission_type:SUPPL+AND+submissions.submission_status:AP+AND+submissions.submission_class_code:EFFICACY{date_filter}'
     url = f"{API_BASE}drugsfda.json?search={quote(search, safe='+:[]')}&sort=submissions.submission_status_date:desc&limit={limit}"
 
+    logger.info("fetch_suppl_approvals url=%s date_from=%s date_to=%s", url, date_from_str, date_to_str)
     all_results = _fetch_paginated_results(url, limit)
+    logger.info("fetch_suppl_approvals raw_results=%d", len(all_results))
 
     drugs = []
     seen_keys = set()
@@ -683,6 +708,7 @@ def fetch_suppl_approvals(date_from, date_to, limit=100):
             drug["slug"] = slugify(drug["brand_name"] or drug["generic_name"] or "")
             drugs.append(drug)
 
+    logger.info("fetch_suppl_approvals filtered_drugs=%d", len(drugs))
     return drugs
 
 
@@ -715,10 +741,13 @@ def fetch_pdf_text(url, max_chars=6000):
                 timeout=30,
             )
         if result.returncode != 0:
+            logger.warning("fetch_pdf_text pdftotext_failed url=%s returncode=%d", url, result.returncode)
             return ""
         text = re.sub(r"\s+", " ", result.stdout).strip()
+        logger.debug("fetch_pdf_text url=%s chars=%d", url, len(text))
         return text[:max_chars]
-    except Exception:
+    except Exception as e:
+        logger.warning("fetch_pdf_text failed url=%s error=%s", url, e)
         return ""
 
 
@@ -803,12 +832,15 @@ def fetch_label(drug):
 
     except HTTPError as e:
         if e.code == 404:
+            logger.debug("fetch_label no_label app_num=%s http_code=404", app_num)
             return None
         name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
+        logger.warning("fetch_label failed app_num=%s name=%s http_code=%s", app_num, name, e.code)
         print(f"  Warning: HTTP {e.code} fetching label for {name}", file=sys.stderr)
         return None
     except (URLError, TimeoutError, json.JSONDecodeError) as e:
         name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
+        logger.warning("fetch_label failed app_num=%s name=%s error=%s", app_num, name, e)
         print(f"  Warning: error fetching label for {name}: {e}", file=sys.stderr)
         return None
 
@@ -816,6 +848,7 @@ def fetch_label(drug):
 def load_previous_approvals(path="data/approvals.json"):
     """Load previous run's approvals.json to reuse label data for cached drugs."""
     if not os.path.exists(path):
+        logger.debug("load_previous_approvals path=%s not_found", path)
         return {}
     try:
         with open(path) as f:
@@ -828,8 +861,10 @@ def load_previous_approvals(path="data/approvals.json"):
                 prev[event_key] = drug
             if app_num and drug.get("label"):
                 prev[app_num] = drug
+        logger.info("load_previous_approvals path=%s cached_entries=%d", path, len(prev))
         return prev
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("load_previous_approvals path=%s error=%s returning_empty", path, e)
         return {}
 
 
@@ -938,14 +973,17 @@ def get_parser():
 def fetch_all_approvals(args, date_from, date_to):
     drugs = []
     if args.submission_type == "nme":
+        logger.info("fetch_all_approvals stage=nme date_from=%s date_to=%s", args.date_from, args.date_to)
         print(f"Fetching NME approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
         drugs = fetch_drugsfda_approvals(date_from, date_to, submission_type="Type 1 - New Molecular Entity", limit=args.limit)
         print(f"Found {len(drugs)} NME prescription drug approvals.", file=sys.stderr)
     elif args.submission_type == "suppl":
+        logger.info("fetch_all_approvals stage=suppl date_from=%s date_to=%s", args.date_from, args.date_to)
         print(f"Fetching efficacy SUPPL approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
         drugs = fetch_suppl_approvals(date_from, date_to, limit=args.limit)
         print(f"Found {len(drugs)} efficacy supplement approvals.", file=sys.stderr)
     else:
+        logger.info("fetch_all_approvals stage=all date_from=%s date_to=%s", args.date_from, args.date_to)
         print(f"Fetching ORIG + efficacy SUPPL approvals from {args.date_from} to {args.date_to}...", file=sys.stderr)
         orig_types = [
             "Type 1 - New Molecular Entity",
@@ -978,12 +1016,14 @@ def fetch_all_approvals(args, date_from, date_to):
                 seen.add(key)
                 deduped.append(d)
         drugs = deduped
+        logger.info("fetch_all_approvals dedup orig=%d suppl=%d unique=%d", len(orig_drugs), len(suppl_drugs), len(drugs))
         print(f"After deduplication: {len(drugs)} unique approval events.", file=sys.stderr)
     return drugs
 
 
 def process_labels(args, drugs):
     if not args.skip_labels:
+        logger.info("process_labels stage=fetch total_drugs=%d cache=%s", len(drugs), args.cache)
         # Load previous label data when --cache is provided
         previous_data = load_previous_approvals() if args.cache else {}
         if args.cache:
@@ -1010,8 +1050,10 @@ def process_labels(args, drugs):
         # Save label cache after processing
         if args.cache:
             save_label_cache(drugs, LABEL_CACHE_PATH)
+            logger.info("process_labels label_cache_saved path=%s", LABEL_CACHE_PATH)
             print(f"Label cache written to {LABEL_CACHE_PATH}", file=sys.stderr)
     else:
+        logger.info("process_labels stage=skip_labels total_drugs=%d", len(drugs))
         for drug in drugs:
             drug["label"] = None
             drug["indication_preview"] = drug.get("submission_class", "") or drug.get("submission_type", "")
@@ -1021,12 +1063,14 @@ def process_labels(args, drugs):
 def summarize_indications(args, drugs, llm_key):
     if args.summarize:
         if not llm_key:
+            logger.warning("summarize_indications skipped reason=no_api_key total_drugs=%d", len(drugs))
             print("Warning: --summarize requires --llm-api-key or LLM_API_KEY env var. Skipping.", file=sys.stderr)
         else:
             summaries_cache = load_indication_summaries()
             summarize_indications_batch(drugs, llm_key, summaries_cache)
             save_indication_summaries(summaries_cache)
             summarized = sum(1 for d in drugs if d.get("indication_summary"))
+            logger.info("summarize_indications complete summarized=%d total=%d", summarized, len(drugs))
             print(f"Summarized {summarized}/{len(drugs)} indications via LLM", file=sys.stderr)
 
 
@@ -1045,8 +1089,10 @@ def write_output(args, drugs):
 
     if args.output:
         write_text_atomic(args.output, json_str)
+        logger.info("write_output path=%s drug_count=%d", args.output, len(drugs))
         print(f"Output written to {args.output}", file=sys.stderr)
     else:
+        logger.info("write_output destination=stdout drug_count=%d", len(drugs))
         print(json_str)
 
 
@@ -1059,10 +1105,15 @@ def main():
     date_from = datetime.strptime(args.date_from, "%Y-%m-%d")
     date_to = datetime.strptime(args.date_to, "%Y-%m-%d")
 
+    logger.info("main start date_from=%s date_to=%s submission_type=%s skip_labels=%s cache=%s summarize=%s",
+                args.date_from, args.date_to, args.submission_type, args.skip_labels, args.cache, args.summarize)
+
     drugs = fetch_all_approvals(args, date_from, date_to)
     drugs = process_labels(args, drugs)
     summarize_indications(args, drugs, llm_key)
     write_output(args, drugs)
+
+    logger.info("main complete drug_count=%d", len(drugs))
 
 
 if __name__ == "__main__":

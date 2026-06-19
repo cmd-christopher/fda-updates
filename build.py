@@ -2,6 +2,7 @@
 """Build the FDA drug approvals static site from JSON data."""
 
 import json
+import logging
 import re
 import sys
 import os
@@ -9,6 +10,8 @@ from datetime import datetime
 import bleach
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
+
+logger = logging.getLogger(__name__)
 
 _SCRIPT_RE = re.compile(r"<script[^>]*>.*?</script>", flags=re.DOTALL | re.IGNORECASE)
 _STYLE_RE = re.compile(r"<style[^>]*>.*?</style>", flags=re.DOTALL | re.IGNORECASE)
@@ -416,19 +419,26 @@ def format_date(value):
 def verify_assets():
     for asset in REQUIRED_ASSETS:
         if not os.path.exists(asset):
+            logger.error("verify_assets missing asset=%s", asset)
             print(f"Error: Required asset missing: {asset}", file=sys.stderr)
             sys.exit(1)
+    logger.info("verify_assets all_present count=%d", len(REQUIRED_ASSETS))
 
 
 def load_data():
     if not os.path.exists(DATA_PATH):
+        logger.error("load_data missing path=%s", DATA_PATH)
         print(f"Error: {DATA_PATH} not found. Run fda_approvals.py first.", file=sys.stderr)
         sys.exit(1)
 
     try:
         with open(DATA_PATH) as f:
-            return json.load(f)
+            data = json.load(f)
+        drug_count = len(data.get("drugs", []))
+        logger.info("load_data path=%s drug_count=%d", DATA_PATH, drug_count)
+        return data
     except (json.JSONDecodeError, OSError) as e:
+        logger.error("load_data failed path=%s error=%s", DATA_PATH, e)
         print(f"Error reading {DATA_PATH}: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -439,23 +449,30 @@ def validate_drug_data(drugs):
         name = drug.get("brand_name") or drug.get("generic_name") or f"drug_{i}"
         for field in required_fields:
             if not drug.get(field):
+                logger.error("validate_drug_data missing field=%s drug=%s index=%d", field, name, i)
                 print(f"Error: Missing required field '{field}' in {name}", file=sys.stderr)
                 sys.exit(1)
+    logger.info("validate_drug_data valid count=%d", len(drugs))
 
 
 def resolve_slug_collisions(drugs):
     slug_counts = {}
+    collisions = 0
     for drug in drugs:
         base_slug = drug["slug"]
         slug = base_slug
         if slug in slug_counts:
             digits = NON_DIGIT_RE.sub("", drug.get("application_number", ""))
             slug = f"{base_slug}-{digits}" if digits else f"{base_slug}-{slug_counts[base_slug]}"
+            collisions += 1
         if slug in slug_counts:
             date_suffix = drug.get("approval_date", "").replace("-", "")
             slug = f"{slug}-{date_suffix}" if date_suffix else f"{slug}-{slug_counts[slug]}"
+            collisions += 1
         drug["slug"] = slug
         slug_counts[slug] = slug_counts.get(slug, 0) + 1
+    if collisions:
+        logger.info("resolve_slug_collisions resolved=%d total_drugs=%d", collisions, len(drugs))
 
 
 def compute_last_updated(data):
@@ -497,6 +514,7 @@ def generate_index_page(env, drugs, last_updated, date_to):
     with open(output_path, "w") as f:
         f.write(html)
 
+    logger.info("generate_index_page path=%s drug_count=%d", output_path, len(drugs))
     print(f"Built {output_path} with {len(drugs)} drug approvals (data through {date_to or 'unknown'})")
 
 
@@ -519,10 +537,12 @@ def generate_detail_pages(env, drugs, last_updated):
         with open(detail_path, "w") as f:
             f.write(detail_html)
 
+    logger.info("generate_detail_pages dir=%s count=%d", drugs_dir, len(drugs))
     print(f"Built {len(drugs)} drug detail pages in {drugs_dir}")
 
 
 def main():
+    logger.info("build main start")
     verify_assets()
     data = load_data()
     drugs = data.get("drugs", [])
@@ -538,6 +558,7 @@ def main():
 
     generate_index_page(env, drugs, last_updated, date_to)
     generate_detail_pages(env, drugs, last_updated)
+    logger.info("build main complete drug_count=%d", len(drugs))
 
 
 if __name__ == "__main__":
