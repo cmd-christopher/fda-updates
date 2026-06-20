@@ -23,7 +23,8 @@ class TestFetchLabelHTTPErrorHandling(unittest.TestCase):
         drug = {"application_number": "NDA123456", "brand_name": "TestDrug"}
 
         # We capture stderr just to ensure nothing is written
-        with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr, \
+             patch('fda_approvals.logger.error'):
             result = fda_approvals.fetch_label(drug)
 
             # Should return None
