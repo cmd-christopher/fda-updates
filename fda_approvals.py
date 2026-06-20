@@ -746,7 +746,7 @@ def fetch_pdf_text(url, max_chars=6000):
         text = re.sub(r"\s+", " ", result.stdout).strip()
         logger.debug("fetch_pdf_text url=%s chars=%d", url, len(text))
         return text[:max_chars]
-    except Exception as e:
+    except (URLError, TimeoutError, OSError, subprocess.SubprocessError) as e:
         logger.warning("fetch_pdf_text failed url=%s error=%s", url, e)
         return ""
 
