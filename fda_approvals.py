@@ -400,7 +400,7 @@ def write_text_atomic(path, text):
             f.write(text)
         os.replace(tmp_path, path)
         logger.debug("write_text_atomic path=%s bytes=%d", path, len(text))
-    except Exception as e:
+    except OSError as e:
         logger.error("write_text_atomic failed path=%s error=%s", path, e)
         if tmp_path and os.path.exists(tmp_path):
             try:
