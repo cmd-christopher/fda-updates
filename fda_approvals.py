@@ -725,6 +725,21 @@ def fetch_pdf_text(url, max_chars=6000):
     if not url or not shutil.which("pdftotext"):
         return ""
 
+    # URL-encode the path component to handle spaces, semicolons, etc.
+    # FDA letter URLs sometimes contain raw spaces and semicolons
+    # (e.g. "207947Orig1s014; s015; 214275Orig1s002ltr.pdf")
+    # urlparse treats ";" as a path-parameter delimiter, so we must encode
+    # the raw URL string before urlparse sees it.
+    from urllib.parse import urlparse, urlunparse
+    # Encode spaces and semicolons in the path portion only
+    scheme, netloc, path, params, query, fragment = urlparse(url)
+    # Reassemble path+params (the part after host, before query) and encode it
+    full_path = path
+    if params:
+        full_path += ";" + params
+    encoded_path = quote(full_path, safe="/%")
+    url = urlunparse((scheme, netloc, encoded_path, "", query, fragment))
+
     try:
         req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urlopen(req, timeout=30) as resp:
@@ -746,7 +761,7 @@ def fetch_pdf_text(url, max_chars=6000):
         text = re.sub(r"\s+", " ", result.stdout).strip()
         logger.debug("fetch_pdf_text url=%s chars=%d", url, len(text))
         return text[:max_chars]
-    except (URLError, TimeoutError, OSError, subprocess.SubprocessError) as e:
+    except (URLError, TimeoutError, OSError, subprocess.SubprocessError, ValueError) as e:
         logger.warning("fetch_pdf_text failed url=%s error=%s", url, e)
         return ""
 
