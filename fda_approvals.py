@@ -60,7 +60,7 @@ class RateLimiter:
 api_rate_limiter = RateLimiter(REQUEST_DELAY)
 INDICATION_SUMMARIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".indication_summaries.json")
 LLM_API_URL = "https://ollama.com/v1/chat/completions"
-LLM_MODEL = "gemma3:12b"
+LLM_MODEL = "gemma4:31b"
 LLM_BATCH_SIZE = 10
 
 EFFICACY_SUPPL_CODES = {"EFFICACY"}
@@ -467,6 +467,7 @@ def summarize_indications_batch(drugs, api_key, summaries_cache, batch_size=LLM_
             "model": LLM_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 500,
+            "think": False,
         }).encode()
 
         req = Request(
