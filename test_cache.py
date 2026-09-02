@@ -68,103 +68,12 @@ class TestLoadPreviousApprovals(unittest.TestCase):
             os.unlink(prev_path)
 
 
-class TestSaveLabelCache(unittest.TestCase):
-    """Test save_label_cache() function."""
-
-    def test_creates_cache_file_with_set_id_mapping(self):
-        """Saves app_num → set_id mapping for drugs with label and set_id."""
-        drugs = [
-            {
-                "application_number": "NDA123456",
-                "label": {"set_id": "uuid-1", "indications_and_usage": ["Test"]},
-            },
-            {
-                "application_number": "NDA789012",
-                "label": {"set_id": "uuid-2"},
-            },
-            {
-                "application_number": "NDA000000",
-                "label": None,
-            },
-            {
-                "application_number": "NDA999999",
-                "label": {"indications_and_usage": ["No set_id here"]},
-            },
-        ]
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            cache_path = f.name
-        try:
-            fda_approvals.save_label_cache(drugs, cache_path)
-            with open(cache_path) as cf:
-                cache = json.load(cf)
-            self.assertEqual(cache["NDA123456"], "uuid-1")
-            self.assertEqual(cache["NDA789012"], "uuid-2")
-            self.assertNotIn("NDA000000", cache)  # No label → skipped
-            self.assertNotIn("NDA999999", cache)  # No set_id → skipped
-        finally:
-            os.unlink(cache_path)
-
-    def test_writes_valid_json(self):
-        """Cache file contains valid JSON."""
-        drugs = [
-            {"application_number": "NDA111", "label": {"set_id": "uuid-aaa"}},
-        ]
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            cache_path = f.name
-        try:
-            fda_approvals.save_label_cache(drugs, cache_path)
-            with open(cache_path) as cf:
-                data = json.load(cf)
-            self.assertIsInstance(data, dict)
-        finally:
-            os.unlink(cache_path)
-
-    def test_creates_parent_directory(self):
-        """save_label_cache creates parent directory if needed."""
-        import tempfile
-        tmpdir = tempfile.mkdtemp()
-        try:
-            nested_path = os.path.join(tmpdir, "subdir", "cache.json")
-            drugs = [
-                {"application_number": "NDA111", "label": {"set_id": "uuid-aaa"}},
-            ]
-            fda_approvals.save_label_cache(drugs, nested_path)
-            self.assertTrue(os.path.exists(nested_path))
-            with open(nested_path) as f:
-                data = json.load(f)
-            self.assertEqual(data["NDA111"], "uuid-aaa")
-        finally:
-            import shutil
-            shutil.rmtree(tmpdir)
-
-    def test_replace_failure_preserves_existing_cache_file(self):
-        """If atomic replacement fails, the previous cache file remains intact."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({"NDAOLD": "uuid-old"}, f)
-            cache_path = f.name
-        try:
-            drugs = [{"application_number": "NDANEW", "label": {"set_id": "uuid-new"}}]
-            with patch("fda_approvals.os.replace", side_effect=OSError("replace failed")):
-                with self.assertRaises(OSError):
-                    fda_approvals.save_label_cache(drugs, cache_path)
-
-            with open(cache_path) as cf:
-                self.assertEqual(json.load(cf), {"NDAOLD": "uuid-old"})
-        finally:
-            os.unlink(cache_path)
-
-
 class TestFetchLabelSetId(unittest.TestCase):
     """Test that fetch_label() includes set_id in returned label dict."""
 
     def test_set_id_function_exists(self):
         """fetch_label function should exist and be callable."""
         self.assertTrue(callable(fda_approvals.fetch_label))
-
-    def test_label_cache_path_defined(self):
-        """LABEL_CACHE_PATH constant should be defined."""
-        self.assertTrue(hasattr(fda_approvals, "LABEL_CACHE_PATH"))
-        self.assertIn(".label_cache.json", fda_approvals.LABEL_CACHE_PATH)
 
 
 class TestCacheCliArg(unittest.TestCase):

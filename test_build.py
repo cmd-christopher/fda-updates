@@ -513,3 +513,185 @@ class TestResolveSlugCollisions(unittest.TestCase):
         self.assertEqual(drugs[2]["slug"], "drug-d-123-1")
 if __name__ == "__main__":
     unittest.main()
+
+class TestFormatPiTextEmpty(unittest.TestCase):
+    """Cover the empty/None early-return branch (line 213)."""
+
+    def test_empty_string(self):
+        self.assertEqual(build.format_pi_text(""), "")
+
+    def test_none(self):
+        self.assertEqual(build.format_pi_text(None), "")
+
+
+class TestFormatPiTextTablesAndLists(unittest.TestCase):
+    """Cover the table/list protection save branches (lines 220-221, 226-227)."""
+
+    def test_table_protected_and_reinserted(self):
+        text = "<table><tr><td>cell</td></tr></table> after table"
+        result = build.format_pi_text(text)
+        # Table placeholder is reinserted in the body
+        self.assertIn("<table>", result)
+
+    def test_list_protected_and_reinserted(self):
+        text = "<ul><li>item</li></ul> after list"
+        result = build.format_pi_text(text)
+        self.assertIn("<ul>", result)
+
+
+class TestFormatPiTextLeadIn(unittest.TestCase):
+    """Cover the indication lead-in detection (lines 263-282)."""
+
+    def test_lead_in_becomes_list_with_subsections(self):
+        text = (
+            "DRUG is indicated for the treatment of: "
+            "psoriasis ( 1.1 ) arthritis ( 1.2 ) "
+            "1.1 Psoriasis is a chronic condition. 1.2 Arthritis is inflammatory."
+        )
+        result = build.format_pi_text(text)
+        self.assertIn("indication-lead", result)
+        self.assertIn("pi-list", result)
+
+    def test_lead_in_no_subsections_returns_just_list(self):
+        # Remainder has no sub-section headings -> returns just the indication list
+        text = (
+            "DRUG is indicated for the treatment of: "
+            "psoriasis ( 1.1 ) arthritis ( 1.2 )"
+        )
+        result = build.format_pi_text(text)
+        self.assertIn("indication-lead", result)
+        self.assertIn("pi-list", result)
+
+    def test_lead_in_match_but_no_paren_refs(self):
+        # "indicated for the treatment of: ..." but group(2) has no "( N.N )" refs
+        text = "DRUG is indicated for the treatment of a single condition. More text follows."
+        result = build.format_pi_text(text)
+        # Should not produce an indication list
+        self.assertNotIn("indication-lead", result)
+
+
+class TestFormatPiTextSubsectionSplit(unittest.TestCase):
+    """Cover sub-section heading splitting (lines 290-305, 308-312)."""
+
+    def test_subsection_headings_split(self):
+        text = (
+            "2 DOSAGE AND ADMINISTRATION "
+            "COSENTYX is a drug. "
+            "2.1 Dosage in Adults The dose is 300 mg. "
+            "2.2 Dosage in Pediatrics The dose is 150 mg."
+        )
+        result = build.format_pi_text(text)
+        self.assertIn("pi-subsection", result)
+        self.assertIn("Dosage in Adults", result)
+        self.assertIn("Dosage in Pediatrics", result)
+
+    def test_no_sections_returns_body(self):
+        # No sub-section headings found -> falls through to body
+        text = "Just some plain body text with no headings here."
+        result = build.format_pi_text(text)
+        self.assertIn("<p>", result)
+
+
+class TestFormatPiTextBullets(unittest.TestCase):
+    """Cover bullet list detection (lines 353-369)."""
+
+    def test_bullet_list_detected(self):
+        text = "Some intro text.\n- item one\n- item two\n- item three"
+        result = build.format_pi_text(text)
+        self.assertIn("pi-list", result)
+        self.assertIn("<li>item one</li>", result)
+
+    def test_bullet_list_then_text_closes_list(self):
+        text = "Intro.\n- item one\n- item two\nFollow up text here."
+        result = build.format_pi_text(text)
+        self.assertIn("pi-list", result)
+        # List should be closed before the follow-up text
+        self.assertIn("</ul>", result)
+
+
+class TestFormatPiTextHtmlStartBranch(unittest.TestCase):
+    """Cover the _HTML_TAG_START_RE branch (372->375)."""
+
+    def test_existing_html_not_wrapped_in_p(self):
+        # Body starting with an HTML tag should not be wrapped in <p> by _split_long_paragraphs
+        text = "<div>already html</div>"
+        result = build.format_pi_text(text)
+        self.assertIn("<div>", result)
+
+
+class TestParseHeadingTitleLine162(unittest.TestCase):
+    """Cover line 162: break when title_parts non-empty and next is lowercase non-connector."""
+
+    def test_breaks_on_lowercase_after_title_parts(self):
+        # "Adverse" -> title, "Reactions" -> title candidate, "reported" -> lowercase non-connector
+        # At i=1 (Reactions), next_w="reported" triggers break at 162 before Reactions is added
+        self.assertEqual(build._parse_heading_title(["Adverse", "Reactions", "reported"]), "Adverse")
+
+    def test_no_break_when_next_is_title_word(self):
+        # When next word is a title word (not lowercase), parsing continues
+        self.assertEqual(build._parse_heading_title(["Adverse", "Reactions"]), "Adverse Reactions")
+
+
+class TestSplitLongParagraphsBranches(unittest.TestCase):
+    """Cover remaining _split_long_paragraphs branches (76->78, 103->106, 116->119)."""
+
+    def test_short_text_colon_single_part(self):
+        # Colon present but only one part -> falls through to single <p>
+        text = "NoSplitHere"
+        # No colon, short
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=100), "<p>NoSplitHere</p>")
+
+    def test_short_with_colon_multiple_parts(self):
+        # Split after colon when followed by uppercase: "Heading: Body"
+        text = "Warning: This is important."
+        result = build._split_long_paragraphs(text, max_chars=100)
+        self.assertIn("<p>Warning:</p>", result)
+        self.assertIn("<p>This is important.</p>", result)
+
+    def test_long_sentence_temp_remaining_appended(self):
+        # Long sentence that, after force-splitting, leaves a remainder that
+        # becomes the new current (line 103->106 and 116->119)
+        text = "a" * 50 + " " + "b" * 50 + " " + "short sentence after."
+        result = build._split_long_paragraphs(text, max_chars=30)
+        # Should produce multiple <p> chunks
+        self.assertIn("<p>", result)
+        chunks = result.split("\n")
+        self.assertGreater(len(chunks), 1)
+
+class TestParseHeadingTitleLine162(unittest.TestCase):
+    """Cover line 162: break when title_parts non-empty and next is lowercase non-connector."""
+
+    def test_breaks_on_lowercase_after_title_parts(self):
+        # "Adverse" -> title, "Reactions" -> title candidate, "reported" -> lowercase non-connector
+        # At i=1 (Reactions), next_w="reported" triggers break at 162 before Reactions is added
+        self.assertEqual(build._parse_heading_title(["Adverse", "Reactions", "reported"]), "Adverse")
+
+    def test_no_break_when_next_is_title_word(self):
+        # When next word is a title word (not lowercase), parsing continues
+        self.assertEqual(build._parse_heading_title(["Adverse", "Reactions"]), "Adverse Reactions")
+
+class TestSplitLongParagraphsBranches(unittest.TestCase):
+    """Cover remaining _split_long_paragraphs branches (76->78, 103->106, 116->119)."""
+
+    def test_short_text_colon_single_part(self):
+        # Colon present but only one part -> falls through to single <p>
+        text = "NoSplitHere"
+        # No colon, short
+        self.assertEqual(build._split_long_paragraphs(text, max_chars=100), "<p>NoSplitHere</p>")
+
+    def test_short_with_colon_multiple_parts(self):
+        # Split after colon when followed by uppercase: "Heading: Body"
+        text = "Warning: This is important."
+        result = build._split_long_paragraphs(text, max_chars=100)
+        self.assertIn("<p>Warning:</p>", result)
+        self.assertIn("<p>This is important.</p>", result)
+
+    def test_long_sentence_temp_remaining_appended(self):
+        # Long sentence that, after force-splitting, leaves a remainder that
+        # becomes the new current (line 103->106 and 116->119)
+        text = "a" * 50 + " " + "b" * 50 + " " + "short sentence after."
+        result = build._split_long_paragraphs(text, max_chars=30)
+        # Should produce multiple <p> chunks
+        self.assertIn("<p>", result)
+        chunks = result.split("\n")
+        self.assertGreater(len(chunks), 1)

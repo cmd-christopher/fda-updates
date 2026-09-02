@@ -1,5 +1,8 @@
+import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+from urllib.error import URLError
 
 import fda_approvals
 
@@ -114,3 +117,61 @@ class TestSupplementPreview(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestFetchPdfText(unittest.TestCase):
+    @patch('fda_approvals.shutil.which', return_value=None)
+    def test_empty_url_returns_empty(self, mock_which):
+        self.assertEqual(fda_approvals.fetch_pdf_text(""), "")
+
+    @patch('fda_approvals.subprocess.run')
+    @patch('fda_approvals.urlopen')
+    @patch('fda_approvals.shutil.which', return_value="/usr/bin/pdftotext")
+    def test_success(self, mock_which, mock_urlopen, mock_run):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"fake pdf"
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_cm
+
+        mock_run.return_value = MagicMock(returncode=0, stdout="extracted  pdf  text ", stderr="")
+        result = fda_approvals.fetch_pdf_text("https://example.com/test.pdf")
+        self.assertEqual(result, "extracted pdf text")
+
+    @patch('fda_approvals.subprocess.run')
+    @patch('fda_approvals.urlopen')
+    @patch('fda_approvals.shutil.which', return_value="/usr/bin/pdftotext")
+    def test_max_chars_truncation(self, mock_which, mock_urlopen, mock_run):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"fake pdf"
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_cm
+
+        long_text = "x" * 10000
+        mock_run.return_value = MagicMock(returncode=0, stdout=long_text, stderr="")
+        result = fda_approvals.fetch_pdf_text("https://example.com/test.pdf", max_chars=100)
+        self.assertEqual(len(result), 100)
+
+    @patch('fda_approvals.urlopen')
+    @patch('fda_approvals.shutil.which', return_value="/usr/bin/pdftotext")
+    def test_urlopen_exception_returns_empty(self, mock_which, mock_urlopen):
+        mock_urlopen.side_effect = URLError("network error")
+        result = fda_approvals.fetch_pdf_text("https://example.com/test.pdf")
+        self.assertEqual(result, "")
+
+    @patch('fda_approvals.subprocess.run', side_effect=subprocess.TimeoutExpired("cmd", 30))
+    @patch('fda_approvals.urlopen')
+    @patch('fda_approvals.shutil.which', return_value="/usr/bin/pdftotext")
+    def test_subprocess_exception_returns_empty(self, mock_which, mock_urlopen, mock_run):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"fake pdf"
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_cm
+        result = fda_approvals.fetch_pdf_text("https://example.com/test.pdf")
+        self.assertEqual(result, "")
+
+
+# ---------------------------------------------------------------------------
+# extract_new_indication_text
+# ---------------------------------------------------------------------------

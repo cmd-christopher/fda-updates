@@ -36,7 +36,6 @@ HTTP_TIMEOUT = 30
 HTTP_MAX_RETRIES = 3
 HTTP_RETRY_BACKOFF = 1.0
 RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
-LABEL_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".label_cache.json")
 
 class RateLimiter:
     def __init__(self, delay):
@@ -884,17 +883,6 @@ def load_previous_approvals(path="data/approvals.json"):
         return {}
 
 
-def save_label_cache(drugs, cache_path):
-    """Save app_num → set_id mapping for future incremental runs."""
-    cache = {}
-    for drug in drugs:
-        app_num = drug.get("application_number", "")
-        label = drug.get("label")
-        if app_num and label and label.get("set_id"):
-            cache[app_num] = label["set_id"]
-    write_json_atomic(cache_path, cache, indent=2)
-
-
 def _process_drug_label(drug_info):
     i, drug, total, use_cache, previous_data = drug_info
     name = drug.get("brand_name") or drug.get("generic_name") or "Unknown"
@@ -1062,12 +1050,6 @@ def process_labels(args, drugs):
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             # list() forces the map to evaluate and consume results in order
             drugs = list(executor.map(_process_drug_label, drug_infos))
-
-        # Save label cache after processing
-        if args.cache:
-            save_label_cache(drugs, LABEL_CACHE_PATH)
-            logger.info("process_labels label_cache_saved path=%s", LABEL_CACHE_PATH)
-            print(f"Label cache written to {LABEL_CACHE_PATH}", file=sys.stderr)
     else:
         logger.info("process_labels stage=skip_labels total_drugs=%d", len(drugs))
         for drug in drugs:
