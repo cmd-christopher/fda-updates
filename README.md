@@ -62,7 +62,7 @@ python3 fda_approvals.py --from 2025-04-24 --to 2026-04-22 --type all --cache --
 The project includes a fully automated weekly pipeline:
 
 - `run_fda_pipeline.sh` — Runs the full fetch → build → deploy pipeline with fail-safe behavior (old site stays live on failure), a project-local `.venv` for Python dependencies, and Pushover notifications on errors.
-- `systemd/` — Contains a systemd timer (`Mon *-*-* 03:00:00 America/New_York`) and service unit for running the pipeline weekly via systemd.
+- `systemd/` — Contains a systemd timer (`Tue *-*-* 10:00:00 America/New_York`) and service unit for running the pipeline weekly via systemd.
 
 ## License
 
