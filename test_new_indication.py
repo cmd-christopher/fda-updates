@@ -106,7 +106,7 @@ class TestSupplementPreview(unittest.TestCase):
         ]
         cache = {"NDA123456:SUPPL:1:2026-01-01": "Efficacy"}
 
-        fda_approvals.summarize_indications_batch(drugs, "", cache)
+        fda_approvals.summarize_indications_batch(drugs, cache)
 
         self.assertNotEqual(drugs[0].get("indication_summary"), "Efficacy")
 

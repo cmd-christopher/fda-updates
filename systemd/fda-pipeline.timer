@@ -1,8 +1,8 @@
 [Unit]
-Description=Run Weekly FDA Drug Approval Pipeline on Monday at 03:00
+Description=Run Weekly FDA Drug Approval Pipeline on Tuesday at 10:00
 
 [Timer]
-OnCalendar=Mon *-*-* 03:00:00 America/New_York
+OnCalendar=Tue *-*-* 10:00:00 America/New_York
 Persistent=true
 Unit=fda-pipeline.service
 

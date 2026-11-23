@@ -11,8 +11,8 @@ SITE_DIR="${SCRIPT_DIR}/site"
 ENV_FILE="$HOME/.config/fda-pipeline/.env"
 
 # ─── Load environment ───────────────────────────────────────────────
-# Per D-07: Pushover keys and LLM API key stored in ~/.config/fda-pipeline/.env
-# File contains: PUSHOVER_APP_KEY=..., PUSHOVER_USER_KEY=..., LLM_API_KEY=...
+# Per D-07: Pushover keys stored in ~/.config/fda-pipeline/.env
+# File contains: PUSHOVER_APP_KEY=..., PUSHOVER_USER_KEY=...
 if [[ -f "$ENV_FILE" ]]; then
   export $(grep -v '^#' "$ENV_FILE" | xargs)
 fi
@@ -31,8 +31,27 @@ DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-${HOME}/.ssh/id_medupdates_synology}"
 PIPELINE_STEP="none"
 
 if [[ -f "$DEPLOY_SSH_KEY" ]]; then
-  export GIT_SSH_COMMAND="ssh -i ${DEPLOY_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  export GIT_SSH_COMMAND="ssh -i ${DEPLOY_SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
 fi
+
+PUSH_ATTEMPTS=3
+PUSH_RETRY_DELAY=60
+
+# ─── Helper: Push site to Synology, retrying transient SSH failures ─
+# A single timeout to the NAS (192.168.1.11:2022) failed the 2026-11-17 run.
+push_site() {
+  local attempt
+  for (( attempt = 1; attempt <= PUSH_ATTEMPTS; attempt++ )); do
+    if git push synology-fda master 2>&1; then
+      return 0
+    fi
+    if (( attempt < PUSH_ATTEMPTS )); then
+      echo "[3/3] Push attempt ${attempt}/${PUSH_ATTEMPTS} failed; retrying in $(( PUSH_RETRY_DELAY * attempt ))s" >&2
+      sleep $(( PUSH_RETRY_DELAY * attempt ))
+    fi
+  done
+  return 1
+}
 
 # ─── Helper: Send Pushover notification on failure ──────────────────
 # Per D-07: Pushover app key and user key from .env file
@@ -140,6 +159,18 @@ cd "$SITE_DIR"
 # Per D-11: Check if there are changes to deploy
 git add -A
 if git diff --cached --quiet; then
+  # A commit left behind by an earlier failed push still needs to reach the NAS.
+  UNPUSHED="$(git rev-list --count synology-fda/master..HEAD 2>/dev/null || echo 0)"
+  if [[ "$UNPUSHED" -gt 0 ]]; then
+    echo "[3/3] No new changes, but ${UNPUSHED} earlier commit(s) not yet pushed"
+    if ! push_site; then
+      echo "[3/3] FAILED: git push to Synology failed" >&2
+      send_failure_notification "deploy" "git push to synology-fda failed"
+      exit 1
+    fi
+    echo "[3/3] Deploy complete"
+    exit 0
+  fi
   echo "[3/3] No changes to deploy. Exiting cleanly."
   exit 0
 fi
@@ -171,7 +202,7 @@ fi
 git commit -m "$COMMIT_MSG"
 
 # Push to Synology
-if ! git push synology-fda master 2>&1; then
+if ! push_site; then
   echo "[3/3] FAILED: git push to Synology failed" >&2
   send_failure_notification "deploy" "git push to synology-fda failed"
   exit 1

@@ -36,7 +36,7 @@ The deployment pipeline is automated via a **systemd user timer** that runs a we
 
 ### Timer schedule
 
-- **Trigger**: Every Monday at 03:00 AM America/New_York (systemd `OnCalendar=Mon *-*-* 03:00:00 America/New_York`)
+- **Trigger**: Every Tuesday at 10:00 AM America/New_York (systemd `OnCalendar=Tue *-*-* 10:00:00 America/New_York`)
 - **Timeout**: 30 minutes (`TimeoutStartSec=1800` in service unit)
 - **Persistence**: `Persistent=true` — if the machine was off at scheduled time, the timer runs on next boot
 
@@ -50,17 +50,15 @@ The deployment pipeline is automated via a **systemd user timer** that runs a we
 
 The deployment requires the following environment configuration. See [CONFIGURATION.md](CONFIGURATION.md) for the full variable reference.
 
-**Required for deployment:**
+**Environment variables:**
 
 | Variable | Location | Purpose |
 |---|---|---|
 | `PUSHOVER_APP_KEY` | `~/.config/fda-pipeline/.env` | Pushover app token for failure notifications |
 | `PUSHOVER_USER_KEY` | `~/.config/fda-pipeline/.env` | Pushover user key for failure notifications |
-| `LLM_API_KEY` | `~/.config/fda-pipeline/.env` | API key for the LLM service (Ollama Cloud) used by `--summarize` |
+<!-- VERIFY: Pushover key names and env file location -->
 
-<!-- VERIFY: Pushover and LLM API key names and env file location -->
-
-Pushover variables are optional — if absent, notifications are silently skipped. `LLM_API_KEY` is required for the `--summarize` step; without it, indication summaries fall back to brand names.
+Pushover variables are optional — if absent, notifications are silently skipped. The `--summarize` step uses local Ollama on the Mac Studio and needs no API key. The Mac Studio must be reachable at `192.168.1.6:11434` with `flint:40b-a2b-qat-int4` available.
 
 **SSH access** to the Synology NAS must be configured for the `synology-fda` git remote (key-based auth to `ssh://wilms@192.168.1.11:2022`). <!-- VERIFY: SSH connection details -->
 
@@ -69,7 +67,7 @@ Pushover variables are optional — if absent, notifications are silently skippe
 - `git` (with access to both the main repo and the Synology remote)
 - SSH deploy key at `~/.ssh/id_medupdates_synology`, or set `DEPLOY_SSH_KEY` to a different key path
 - `curl` (for Pushover notifications)
-- Network access to `api.fda.gov` and the LLM API endpoint
+- Network access to `api.fda.gov` and local Ollama on the Mac Studio at `192.168.1.6:11434`
 
 ## Rollback Procedure
 

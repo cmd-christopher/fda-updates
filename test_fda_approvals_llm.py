@@ -1,5 +1,6 @@
+import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import fda_approvals
 
 class TestSummarizeIndicationsBatch(unittest.TestCase):
@@ -32,20 +33,107 @@ class TestSummarizeIndicationsBatch(unittest.TestCase):
 
         # Initial state
         summaries_cache = {}
-        api_key = "test_key"
-
         # Run function
-        fda_approvals.summarize_indications_batch(drugs, api_key, summaries_cache)
+        fda_approvals.summarize_indications_batch(drugs, summaries_cache)
 
-        # Check assertions
-        # Expected behavior:
-        # summaries_cache[app_num] = brand
-        # drug["indication_summary"] = drug.get("brand_name", "") or drug.get("generic_name", "")
-        self.assertEqual(summaries_cache["NDA123"], "TestBrand")
+        # Fallbacks are shown but not cached, so the next run retries them.
+        self.assertEqual(summaries_cache, {})
         self.assertEqual(drugs[0]["indication_summary"], "TestBrand")
-
-        self.assertEqual(summaries_cache["NDA456"], "GenericBrand")
         self.assertEqual(drugs[1]["indication_summary"], "GenericBrand")
+
+
+def _ollama_reply(content):
+    resp = MagicMock()
+    resp.read.return_value = json.dumps({"message": {"content": content}}).encode()
+    cm = MagicMock()
+    cm.__enter__.return_value = resp
+    return cm
+
+
+def _drug(app="NDA221276", brand="HIBSAGO"):
+    return {
+        "application_number": app,
+        "brand_name": brand,
+        "generic_name": "",
+        "label": {"indications_and_usage": ["treatment of chronic hepatitis B virus infection"]},
+    }
+
+
+class TestSummarizeReplies(unittest.TestCase):
+    @patch('fda_approvals.time.sleep')
+    @patch('fda_approvals.urlopen')
+    def test_literal_cache_key_reply_is_accepted(self, mock_urlopen, mock_sleep):
+        """The model often writes the literal CACHE_KEY instead of the real key."""
+        mock_urlopen.return_value = _ollama_reply("CACHE_KEY|chronic hepatitis B virus infection")
+        drug = _drug()
+        cache = {}
+        result = fda_approvals.summarize_indications_batch([drug], cache)
+        key = fda_approvals.indication_cache_key(drug)
+        self.assertEqual(result, (1, 0))
+        self.assertEqual(cache[key], "chronic hepatitis B virus infection")
+        self.assertEqual(drug["indication_summary"], "chronic hepatitis B virus infection")
+
+    @patch('fda_approvals.time.sleep')
+    @patch('fda_approvals.urlopen')
+    def test_echoed_format_line_then_answer(self, mock_urlopen, mock_sleep):
+        mock_urlopen.return_value = _ollama_reply("CACHE_KEY|condition_name\nNDA221291|ischemic stroke")
+        drug = _drug("NDA221291", "SUNHARBO")
+        cache = {}
+        fda_approvals.summarize_indications_batch([drug], cache)
+        self.assertEqual(drug["indication_summary"], "ischemic stroke")
+
+    @patch('fda_approvals.time.sleep')
+    @patch('fda_approvals.urlopen')
+    def test_placeholder_only_reply_falls_back_uncached(self, mock_urlopen, mock_sleep):
+        mock_urlopen.return_value = _ollama_reply("CACHE_KEY|condition_name")
+        drug = _drug()
+        cache = {}
+        result = fda_approvals.summarize_indications_batch([drug], cache)
+        self.assertEqual(result, (0, 1))
+        self.assertEqual(cache, {})
+        self.assertEqual(drug["indication_summary"], "HIBSAGO")
+
+    @patch('fda_approvals.time.sleep')
+    @patch('fda_approvals.urlopen')
+    def test_bad_cached_value_is_resummarized(self, mock_urlopen, mock_sleep):
+        """A brand-name fallback saved by older code is not trusted from the cache."""
+        mock_urlopen.return_value = _ollama_reply("chronic hepatitis B")
+        drug = _drug()
+        key = fda_approvals.indication_cache_key(drug)
+        cache = {key: "HIBSAGO"}
+        fda_approvals.summarize_indications_batch([drug], cache)
+        self.assertEqual(cache[key], "chronic hepatitis B")
+        mock_urlopen.assert_called_once()
+
+    @patch('fda_approvals.time.sleep')
+    @patch('fda_approvals.urlopen')
+    def test_good_cached_value_skips_model(self, mock_urlopen, mock_sleep):
+        drug = _drug()
+        key = fda_approvals.indication_cache_key(drug)
+        cache = {key: "chronic hepatitis B"}
+        self.assertEqual(fda_approvals.summarize_indications_batch([drug], cache), (0, 0))
+        mock_urlopen.assert_not_called()
+        self.assertEqual(drug["indication_summary"], "chronic hepatitis B")
+
+
+class TestParseConditionReply(unittest.TestCase):
+    def test_think_leak(self):
+        reply = "moderate to severe HS</think>BLA761349:SUPPL:13:2026-10-15|hidradenitis suppurativa"
+        self.assertEqual(fda_approvals.parse_condition_reply(reply), "hidradenitis suppurativa")
+
+    def test_think_block(self):
+        self.assertEqual(fda_approvals.parse_condition_reply("<think>hmm</think>\nPlaque psoriasis."), "Plaque psoriasis")
+
+    def test_rejects_raw_label_text(self):
+        reply = "adult patients with metastatic NSCLC who have disease progression during or after chemotherapy"
+        self.assertEqual(fda_approvals.parse_condition_reply(reply), "")
+
+    def test_rejects_brand_name(self):
+        self.assertEqual(fda_approvals.parse_condition_reply("Olumiant", {"brand_name": "OLUMIANT"}), "")
+
+    def test_empty(self):
+        self.assertEqual(fda_approvals.parse_condition_reply(""), "")
+
 
 class TestLoadIndicationSummaries(unittest.TestCase):
     def test_missing_file(self):
